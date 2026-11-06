@@ -4,11 +4,13 @@ import core.contracts.PipelineError
 import core.contracts.PipelineState
 import core.contracts.Stage
 import core.contracts.TranscriptionPipeline
+import core.contracts.TranscriptResult
 import kotlinx.coroutines.ExperimentalCoroutinesApi
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.test.StandardTestDispatcher
+import kotlinx.coroutines.test.UnconfinedTestDispatcher
 import kotlinx.coroutines.test.runCurrent
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.*
@@ -32,11 +34,14 @@ class PipelineSessionTest {
         override fun cancel(jobId: String) { cancellations += jobId }
     }
 
-    @Test fun startIsOffloadedAndDuplicateClicksDoNotCreateJobs() = runTest {
+    @Test fun startYieldsToWorkerDispatcherAndDuplicateClicksDoNotCreateJobs() = runTest {
         val dispatcher = StandardTestDispatcher(testScheduler)
         val pipeline = Pipeline()
         val session = PipelineSession(pipeline, backgroundScope, dispatcher)
-        launch { session.start("content://synthetic/1") }
+        launch(UnconfinedTestDispatcher(testScheduler)) { session.start("content://synthetic/1") }
+        assertTrue(session.state.value.starting)
+        assertTrue(pipeline.starts.isEmpty())
+        assertNull(session.start("content://synthetic/2"))
         runCurrent()
         assertEquals(listOf("content://synthetic/1"), pipeline.starts)
         assertEquals("job-1", session.start("content://synthetic/1"))
@@ -52,7 +57,8 @@ class PipelineSessionTest {
         session.reset()
         launch { session.start("content://synthetic/new") }; runCurrent()
         pipeline.flows.getValue("job-2").value = PipelineState.Running(Stage.ASR, null); runCurrent()
-        pipeline.flows.getValue("job-1").value = PipelineState.Failed(PipelineError.ENGINE_FAILED); runCurrent()
+        pipeline.flows.getValue("job-1").value = PipelineState.Completed(TranscriptResult("job-1", 0, emptyList()))
+        runCurrent()
         assertEquals("job-2", session.state.value.jobId)
         assertEquals(PipelineState.Running(Stage.ASR, null), session.state.value.state)
     }
@@ -118,7 +124,7 @@ class PipelineSessionTest {
         val pipeline = Pipeline()
         val session = PipelineSession(pipeline, backgroundScope, StandardTestDispatcher(testScheduler))
         launch { session.start("content://synthetic/1") }; runCurrent()
-        val result = core.contracts.TranscriptResult("job-1", 0, emptyList())
+        val result = TranscriptResult("job-1", 0, emptyList())
         pipeline.flows.getValue("job-1").value = PipelineState.Completed(result); runCurrent()
         pipeline.flows.getValue("job-1").value = PipelineState.Failed(PipelineError.UNKNOWN); runCurrent()
         assertEquals(PipelineState.Completed(result), session.state.value.state)

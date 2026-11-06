@@ -51,9 +51,13 @@ fun AudioImportRoute(
     LaunchedEffect(controller, onStartAudio != null) {
         if (onStartAudio != null) controller.reset()
     }
+    var picking by rememberSaveable { mutableStateOf(false) }
+    var pickerError by remember { mutableStateOf<String?>(null) }
     var readingSelection by remember { mutableStateOf(false) }
     var starting by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(LocalAudioDocument()) { uri ->
+        picking = false
+        pickerError = null
         if (uri != null) {
             readingSelection = true
             scope.launch {
@@ -83,10 +87,21 @@ fun AudioImportRoute(
     }
     ImportScreen(
         selectedAudioName = controller.audioName,
-        onChooseAudio = { picker.launch(arrayOf("audio/*")) },
+        onChooseAudio = {
+            if (!picking && !readingSelection && !starting && controller.jobId == null) {
+                picking = true
+                pickerError = null
+                try {
+                    picker.launch(arrayOf("audio/*"))
+                } catch (_: Exception) {
+                    picking = false
+                    pickerError = "Не удалось открыть выбор файла. Попробуйте ещё раз."
+                }
+            }
+        },
         onStart = {
             val uri = controller.audioUri
-            if (uri != null && !starting) {
+            if (uri != null && !picking && !readingSelection && !starting && controller.jobId == null) {
                 if (onStartAudio != null) {
                     onStartAudio(uri) // F3 owns the job in its ViewModel, not this screen's scope.
                 } else {
@@ -102,8 +117,8 @@ fun AudioImportRoute(
             }
         },
         modifier = modifier,
-        errorMessage = controller.errorMessage,
-        busy = readingSelection || starting || controller.jobId != null,
+        errorMessage = pickerError ?: controller.errorMessage,
+        busy = picking || readingSelection || starting || controller.jobId != null,
     )
 }
 

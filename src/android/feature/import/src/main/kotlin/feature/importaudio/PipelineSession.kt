@@ -78,7 +78,10 @@ internal class PipelineSession(
         }
     }
 
-    /** Reconnects to an existing job; never invokes start. Also used after a saved job ID is restored. */
+    /**
+     * Reconnects to an existing job; never invokes start. The ID must belong to this live
+     * pipeline instance; process-death recovery is not implied.
+     */
     fun attach(jobId: String, audioUri: String? = null) {
         if (closed || state.value.jobId == jobId) return
         attach(jobId, audioUri, ++generation, false)

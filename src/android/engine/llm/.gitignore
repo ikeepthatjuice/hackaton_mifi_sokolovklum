@@ -1,0 +1,8 @@
+/external/
+/.cxx/
+/build/
+*.gguf
+**/local.properties
+**/.gradle/
+**/build/
+**/.cxx/

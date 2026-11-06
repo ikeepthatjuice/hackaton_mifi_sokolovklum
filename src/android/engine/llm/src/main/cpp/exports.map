@@ -1,0 +1,4 @@
+{
+    global: Java_engine_llm_NativeBridge_*;
+    local: *;
+};

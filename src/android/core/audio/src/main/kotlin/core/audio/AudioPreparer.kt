@@ -21,16 +21,24 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 import kotlin.coroutines.coroutineContext
 
-/** Decoding failed with a reason the pipeline maps to UI state. */
-class AudioPreparationException(val error: PipelineError, message: String, cause: Throwable? = null) :
-    Exception(message, cause)
-
 /**
- * Not enough free space in filesDir for the decoded PCM.
- * Separate type until PipelineError gets a storage code (contract change).
+ * Audio preparation failed with a reason the pipeline maps to [core.contracts.PipelineState.Failed].
+ * [requiredBytes] is set only for INSUFFICIENT_STORAGE: missing bytes (required − available).
  */
-class InsufficientStorageException(val requiredBytes: Long, val availableBytes: Long) :
-    Exception("Need $requiredBytes bytes for PCM, only $availableBytes free")
+class AudioPreparationException(
+    val error: PipelineError,
+    message: String,
+    cause: Throwable? = null,
+    val requiredBytes: Long? = null,
+) : Exception(message, cause)
+
+private fun insufficientStorage(required: Long, available: Long, cause: Throwable? = null) =
+    AudioPreparationException(
+        PipelineError.INSUFFICIENT_STORAGE,
+        "Need $required bytes for PCM, only $available free",
+        cause,
+        requiredBytes = (required - available).coerceAtLeast(1),
+    )
 
 /**
  * Turns a user-picked audio URI into the contract PCM file
@@ -199,7 +207,7 @@ class AudioPreparer(private val context: Context) {
         } catch (e: IOException) {
             // Disk filled up mid-write (duration unknown or estimate too low); other IO errors pass through.
             val available = StatFs(context.filesDir.path).availableBytes
-            if (available < MIN_FREE_BYTES) throw InsufficientStorageException(pending.toLong(), available).apply { initCause(e) }
+            if (available < MIN_FREE_BYTES) throw insufficientStorage(pending.toLong(), available, e)
             throw e
         }
         bytes.clear()
@@ -208,7 +216,7 @@ class AudioPreparer(private val context: Context) {
     private fun checkFreeSpace(required: Long?) {
         if (required == null) return
         val available = StatFs(context.filesDir.path).availableBytes
-        if (available < required) throw InsufficientStorageException(required, available)
+        if (available < required) throw insufficientStorage(required, available)
     }
 
     private companion object {

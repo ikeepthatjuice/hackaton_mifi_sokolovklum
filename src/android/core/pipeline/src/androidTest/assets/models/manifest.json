@@ -1,0 +1,6 @@
+{
+  "models": [
+    { "target_file": "tiny.dat", "sha256": "ea72c66d0926530681d94200c68bd1adbb9a0d821a73fdfd07f8fe786bac3c81", "size_bytes": 24 },
+    { "target_file": "corrupt.dat", "sha256": "0000000000000000000000000000000000000000000000000000000000000000", "size_bytes": 9 }
+  ]
+}

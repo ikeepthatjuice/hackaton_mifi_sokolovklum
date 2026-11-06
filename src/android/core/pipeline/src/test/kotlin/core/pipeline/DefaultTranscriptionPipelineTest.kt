@@ -154,4 +154,77 @@ class DefaultTranscriptionPipelineTest {
         advanceUntilIdle()
         assertTrue(p.observe(id).value is PipelineState.Completed)
     }
+
+    @Test
+    fun cancelBeforeBodyStartedEndsCancelled() = runTest {
+        val p = pipeline()
+        val id = p.start("content://synthetic/1")
+        p.cancel(id) // nothing has run yet on the test dispatcher
+        advanceUntilIdle()
+
+        assertEquals(PipelineState.Cancelled, p.observe(id).value)
+        assertEquals(emptyList<String>(), world.loadOrder)
+    }
+
+    @Test
+    fun threeOverlappingStartsRunOnlyTheLastAndNeverTwoModels() = runTest {
+        val p = pipeline()
+        world.hangAt = Stage.ASR
+        val first = p.start("content://synthetic/1")
+        advanceUntilIdle()
+        val second = p.start("content://synthetic/2")
+        world.hangAt = null
+        val third = p.start("content://synthetic/3")
+        advanceUntilIdle()
+
+        assertEquals(PipelineState.Cancelled, p.observe(first).value)
+        assertEquals(PipelineState.Cancelled, p.observe(second).value)
+        assertTrue(p.observe(third).value is PipelineState.Completed)
+        assertEquals(1, world.maxLoaded)
+    }
+
+    @Test
+    fun cancelDuringLastNonSuspendingStepEndsCancelledNotCompleted() = runTest {
+        val p = pipeline()
+        lateinit var id: String
+        world.onPostprocess = { p.cancel(id) } // engine ignores cancellation and returns normally
+        id = p.start("content://synthetic/1")
+        advanceUntilIdle()
+
+        assertEquals(PipelineState.Cancelled, p.observe(id).value)
+        assertFalse(jobDir(id).exists())
+    }
+
+    @Test
+    fun engineInternalCancellationIsEngineFailedNotCancelled() = runTest {
+        val p = pipeline()
+        world.failAt = Stage.ASR
+        world.engineFailure = java.util.concurrent.CancellationException("engine timeout")
+        val id = p.start("content://synthetic/1")
+        advanceUntilIdle()
+
+        assertEquals(PipelineState.Failed(PipelineError.ENGINE_FAILED), p.observe(id).value)
+    }
+
+    @Test
+    fun engineLoadErrorIsModelLoadFailed() = runTest {
+        val p = pipeline()
+        world.failLoadOf = "asr"
+        val id = p.start("content://synthetic/1")
+        advanceUntilIdle()
+
+        assertEquals(PipelineState.Failed(PipelineError.MODEL_LOAD_FAILED), p.observe(id).value)
+        assertEquals(0, world.loadedNow)
+    }
+
+    @Test
+    fun knownFailureFromEngineKeepsItsError() = runTest {
+        val p = pipeline()
+        world.failAt = Stage.DIARIZATION
+        world.engineFailure = PipelineFailure(PipelineError.OUT_OF_MEMORY)
+        val id = p.start("content://synthetic/1")
+        advanceUntilIdle()
+
+        assertEquals(PipelineState.Failed(PipelineError.OUT_OF_MEMORY), p.observe(id).value)
+    }
 }

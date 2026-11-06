@@ -19,16 +19,20 @@ class FakeWorld(val jobsDir: File) {
     var hangAt: Stage? = null
     var failAt: Stage? = null
     var audioFailure: Throwable? = null
+    var engineFailure: Throwable? = null // thrown by the engine of failAt instead of RuntimeException
+    var failLoadOf: String? = null
+    var onPostprocess: (() -> Unit)? = null
     var loadedNow = 0
     var maxLoaded = 0
     val loadOrder = mutableListOf<String>()
 
     suspend fun gate(stage: Stage) {
-        if (failAt == stage) throw RuntimeException("fake $stage failure")
+        if (failAt == stage) throw engineFailure ?: RuntimeException("fake $stage failure")
         if (hangAt == stage) awaitCancellation()
     }
 
     fun loaded(name: String) {
+        if (failLoadOf == name) throw IllegalStateException("fake $name load failure")
         loadOrder += name
         loadedNow++
         maxLoaded = maxOf(maxLoaded, loadedNow)
@@ -70,6 +74,7 @@ class FakeAligner : TranscriptAligner {
 class FakePostprocessor(private val world: FakeWorld) : TranscriptPostprocessor, AutoCloseable {
     override suspend fun process(utterances: List<Utterance>): List<Utterance> {
         world.gate(Stage.POSTPROCESS)
+        world.onPostprocess?.invoke()
         return utterances.map { it.copy(displayText = it.rawText.replaceFirstChar(Char::uppercase) + ".") }
     }
     override fun close() { world.loadedNow-- }

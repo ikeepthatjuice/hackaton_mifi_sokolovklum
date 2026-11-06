@@ -8,6 +8,7 @@ import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import kotlinx.coroutines.withContext
+import org.json.JSONException
 import org.json.JSONObject
 import java.io.File
 import java.io.FileNotFoundException
@@ -26,38 +27,42 @@ fun interface ModelStore {
  * If `assets/models/manifest.json` exists, the copy is checked against its `sha256` and `size_bytes`.
  *
  * The phone needs the asset size free on top of the APK (weights exist twice); checked with StatFs first.
+ * Exact asset size needs the weights stored uncompressed in the APK (noCompress in the app build).
  */
 class AssetModelStore(private val context: Context) : ModelStore {
 
     private val modelsDir = File(context.filesDir, "models")
     private val mutex = Mutex()
-    private val manifest: Map<String, ManifestEntry> by lazy { readManifest() }
+    private var manifest: Map<String, ManifestEntry>? = null
 
     override suspend fun ensureModel(name: String): File = withContext(Dispatchers.IO) {
         require(name.isNotEmpty() && '/' !in name && name != "..") { "model name must be a file name: $name" }
         mutex.withLock {
-            val target = File(modelsDir, name)
-            val expected = manifest[name]
-            if (target.exists() && (expected?.sizeBytes == null || target.length() == expected.sizeBytes)) {
-                return@withContext target
-            }
-
+            val expected = manifest()[name]
             val assetPath = "$ASSET_DIR/$name"
             val size = assetLength(assetPath) ?: expected?.sizeBytes
+            val target = File(modelsDir, name)
+            // Reuse only a file of the expected size; a different size means new weights after an app update.
+            if (target.exists() && (size == null || target.length() == size)) return@withContext target
+
+            val input = try {
+                context.assets.open(assetPath)
+            } catch (e: FileNotFoundException) {
+                throw PipelineFailure(PipelineError.MODEL_MISSING, cause = e)
+            }
             modelsDir.mkdirs()
             if (size != null) {
-                val available = StatFs(modelsDir.path).availableBytes
-                if (available < size) throw PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, size - available)
+                // A stale target is replaced, so its space counts as free.
+                val available = freeBytes() + (if (target.exists()) target.length() else 0L)
+                if (available < size) {
+                    input.close()
+                    throw PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, size - available)
+                }
             }
 
             val tmp = File(modelsDir, "$name.tmp")
             try {
                 val digest = MessageDigest.getInstance("SHA-256")
-                val input = try {
-                    context.assets.open(assetPath)
-                } catch (e: FileNotFoundException) {
-                    throw PipelineFailure(PipelineError.MODEL_MISSING, cause = e)
-                }
                 input.use { src ->
                     tmp.outputStream().use { dst ->
                         val buf = ByteArray(1 shl 16)
@@ -74,11 +79,14 @@ class AssetModelStore(private val context: Context) : ModelStore {
                 if (expected?.sha256 != null && !expected.sha256.equals(sha, ignoreCase = true)) {
                     throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED)
                 }
+                if (expected?.sizeBytes != null && tmp.length() != expected.sizeBytes) {
+                    throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED)
+                }
                 if (!tmp.renameTo(target)) throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED)
                 target
             } catch (e: IOException) {
-                val available = StatFs(modelsDir.path).availableBytes
-                if (size != null && available < size) {
+                val available = runCatching { freeBytes() }.getOrNull()
+                if (size != null && available != null && available < size) {
                     throw PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, size - available, e)
                 }
                 throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED, cause = e)
@@ -88,25 +96,37 @@ class AssetModelStore(private val context: Context) : ModelStore {
         }
     }
 
-    // Exact length works only for uncompressed assets (noCompress for weights in the app build).
+    private fun freeBytes() = StatFs(modelsDir.path).availableBytes
+
     private fun assetLength(path: String): Long? = try {
         context.assets.openFd(path).use { it.length.takeIf { len -> len >= 0 } }
     } catch (e: IOException) {
-        null
+        null // missing or compressed asset
     }
 
-    private fun readManifest(): Map<String, ManifestEntry> = try {
-        val json = context.assets.open("$ASSET_DIR/manifest.json").bufferedReader().use { it.readText() }
-        val models = JSONObject(json).getJSONArray("models")
-        (0 until models.length()).associate { i ->
-            val m = models.getJSONObject(i)
-            m.getString("target_file") to ManifestEntry(
-                sha256 = m.optString("sha256").takeIf { it.isNotEmpty() },
-                sizeBytes = m.optLong("size_bytes", -1).takeIf { it >= 0 },
-            )
+    // Called under mutex. Cached only on success; a broken manifest fails every call loudly.
+    private fun manifest(): Map<String, ManifestEntry> = manifest ?: readManifest().also { manifest = it }
+
+    private fun readManifest(): Map<String, ManifestEntry> {
+        val json = try {
+            context.assets.open("$ASSET_DIR/manifest.json").bufferedReader().use { it.readText() }
+        } catch (e: FileNotFoundException) {
+            return emptyMap() // no manifest in assets: SHA/size check is optional
+        } catch (e: IOException) {
+            throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED, cause = e)
         }
-    } catch (e: IOException) {
-        emptyMap() // no manifest in assets: SHA check is optional
+        return try {
+            val models = JSONObject(json).getJSONArray("models")
+            (0 until models.length()).associate { i ->
+                val m = models.getJSONObject(i)
+                m.getString("target_file") to ManifestEntry(
+                    sha256 = if (m.isNull("sha256")) null else m.optString("sha256", "").ifEmpty { null },
+                    sizeBytes = if (m.isNull("size_bytes")) null else m.optLong("size_bytes", -1).takeIf { it >= 0 },
+                )
+            }
+        } catch (e: JSONException) {
+            throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED, cause = e)
+        }
     }
 
     private class ManifestEntry(val sha256: String?, val sizeBytes: Long?)

@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Fetches the pinned sherpa-onnx Android prebuilt into external/sherpa-onnx-android/:
 #   include/sherpa-onnx/c-api/c-api.h
-#   jniLibs/{arm64-v8a,x86_64}/{libsherpa-onnx-c-api.so,libonnxruntime.so,...}
+#   jniLibs/{arm64-v8a,x86_64}/{libsherpa-onnx-c-api.so,libonnxruntime.so}
 # The release archive has only .so files, so the header is taken from the same tag.
 # Both files are checked by SHA-256; a mismatch fails the script. Idempotent.
 set -euo pipefail
@@ -12,6 +12,8 @@ ARCHIVE_SHA256=39003753ec293425ed56723ea9b972b98841a490af3311670c3060548d654330
 HEADER_URL="https://raw.githubusercontent.com/k2-fsa/sherpa-onnx/$VERSION/sherpa-onnx/c-api/c-api.h"
 HEADER_SHA256=5698f38ba09ad2bdf085c56a6cbbd7741acf15e25f4ce5c7097b9702cadf437f
 ABIS=(arm64-v8a x86_64) # must match abiFilters in the Gradle modules
+# Only what the C API needs; jni/cxx-api .so would add APK weight and risk duplicates.
+LIBS=(libsherpa-onnx-c-api.so libonnxruntime.so)
 
 ROOT=$(git rev-parse --show-toplevel)
 DEST="$ROOT/external/sherpa-onnx-android"
@@ -36,10 +38,13 @@ fetch "$HEADER_URL" "$HEADER_SHA256" "$tmp/c-api.h"
 tar -xjf "$tmp/sherpa.tar.bz2" -C "$tmp"
 
 rm -rf "$DEST"
-mkdir -p "$DEST/include/sherpa-onnx/c-api" "$DEST/jniLibs"
+mkdir -p "$DEST/include/sherpa-onnx/c-api"
 cp "$tmp/c-api.h" "$DEST/include/sherpa-onnx/c-api/"
 for abi in "${ABIS[@]}"; do
-  cp -R "$tmp/jniLibs/$abi" "$DEST/jniLibs/"
+  mkdir -p "$DEST/jniLibs/$abi"
+  for lib in "${LIBS[@]}"; do
+    cp "$tmp/jniLibs/$abi/$lib" "$DEST/jniLibs/$abi/"
+  done
 done
 echo "$VERSION" > "$STAMP"
 echo "sherpa-onnx $VERSION -> $DEST"

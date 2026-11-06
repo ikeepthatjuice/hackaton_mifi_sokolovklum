@@ -17,9 +17,14 @@ android {
 }
 
 dependencies {
+    api(project(":core:contracts"))
+    implementation(libs.androidx.activity.compose)
+    implementation(libs.kotlinx.coroutines.android)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.runtime)
+    implementation(libs.compose.runtime.saveable)
     implementation(libs.compose.ui)
     implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
+    testImplementation(libs.junit)
 }

@@ -14,8 +14,10 @@ adb logcat -c
 # Save logcat on every exit, including a failed installDebug.
 trap 'adb logcat -d > "$ROOT/emulator-logcat.txt"' EXIT
 
-# Cached AVD keeps the app from a previous run, signed with that runner's debug key.
-adb uninstall "$PKG" >/dev/null 2>&1 || true
+# Cached AVD keeps the app and module test APKs from a previous run, signed with that runner's debug key.
+for p in $(adb shell pm list packages com.neurostenographer | tr -d '\r' | sed 's/^package://'); do
+  adb uninstall "$p" >/dev/null 2>&1 || true
+done
 ./gradlew --no-daemon installDebug || exit 1
 
 adb shell am start -W -n "$PKG/.MainActivity"

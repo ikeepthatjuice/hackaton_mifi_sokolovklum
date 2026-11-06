@@ -1,0 +1,35 @@
+# Данные кейса и локальные результаты — никогда в git (PROJECT_PLAN §9)
+/case_data/
+/local_models/
+/local_outputs/
+/local_recordings/
+/local_reports/
+/secrets/
+.env
+.env.*
+!.env.example
+*.jks
+*.keystore
+
+# Веса моделей: описываются в models/manifest.json, сами файлы не коммитим
+*.bin
+*.onnx
+*.gguf
+*.pt
+*.tflite
+
+# Сборка, кэши, IDE
+build/
+.gradle/
+.kotlin/
+.cxx/
+.externalNativeBuild/
+captures/
+local.properties
+.idea/
+*.iml
+.DS_Store
+
+# Python-окружения тестов
+.venv/
+__pycache__/

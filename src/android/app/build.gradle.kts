@@ -42,6 +42,10 @@ android {
 
 dependencies {
     implementation(project(":core:contracts"))
+    implementation(project(":core:audio"))
+    implementation(project(":core:pipeline"))
+    implementation(project(":core:export"))
+    implementation(libs.kotlinx.coroutines.android)
     implementation(project(":feature:import"))
     implementation(project(":feature:transcript"))
 

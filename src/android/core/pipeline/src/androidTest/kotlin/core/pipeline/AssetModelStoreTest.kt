@@ -28,7 +28,7 @@ class AssetModelStoreTest {
     }
 
     @Test
-    fun copiesOnceAndReusesTheFile() = runBlocking {
+    fun copiesOnceAndReusesTheFile(): Unit = runBlocking {
         val first = store.ensureModel("tiny.dat")
         assertEquals("synthetic model weights\n".repeat(170), first.readText())
         val stamp = first.lastModified()
@@ -40,26 +40,26 @@ class AssetModelStoreTest {
     }
 
     @Test
-    fun missingAssetIsModelMissing() = runBlocking {
+    fun missingAssetIsModelMissing(): Unit = runBlocking {
         expectFailure(PipelineError.MODEL_MISSING) { store.ensureModel("absent.dat") }
     }
 
     @Test
-    fun shaMismatchIsModelLoadFailedAndLeavesNothing() = runBlocking {
+    fun shaMismatchIsModelLoadFailedAndLeavesNothing(): Unit = runBlocking {
         expectFailure(PipelineError.MODEL_LOAD_FAILED) { store.ensureModel("corrupt.dat") }
         assertFalse(File(modelsDir, "corrupt.dat").exists())
         assertFalse(File(modelsDir, "corrupt.dat.tmp").exists())
     }
 
     @Test
-    fun compressedAssetUsesManifestSize() = runBlocking {
+    fun compressedAssetUsesManifestSize(): Unit = runBlocking {
         // aapt compresses .dat, so the exact size can only come from manifest size_bytes.
         assertThrows(IOException::class.java) { context.assets.openFd("models/tiny.dat") }
         assertEquals(4080L, store.ensureModel("tiny.dat").length())
     }
 
     @Test
-    fun compressedAssetWithoutManifestSizeIsModelMissingNotBlindCopy() = runBlocking {
+    fun compressedAssetWithoutManifestSizeIsModelMissingNotBlindCopy(): Unit = runBlocking {
         assertThrows(IOException::class.java) { context.assets.openFd("models/unlisted.dat") }
         expectFailure(PipelineError.MODEL_MISSING) { store.ensureModel("unlisted.dat") }
         assertFalse(File(modelsDir, "unlisted.dat").exists())

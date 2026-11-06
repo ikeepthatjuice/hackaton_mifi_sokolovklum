@@ -18,4 +18,7 @@ rootProject.name = "neurostenographer"
 
 include(":app")
 include(":core:contracts")
-// engine/* и остальные core/* модули подключаются PR владельцев (согласование с back).
+include(":engine:asr")
+include(":engine:diarization")
+include(":engine:alignment")
+

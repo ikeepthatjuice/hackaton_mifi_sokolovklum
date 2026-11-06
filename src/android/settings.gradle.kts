@@ -18,4 +18,6 @@ rootProject.name = "neurostenographer"
 
 include(":app")
 include(":core:contracts")
+// Front modules; addition agreed with back in B2/#5.
+include(":feature:import", ":feature:transcript")
 // engine/* и остальные core/* модули подключаются PR владельцев (согласование с back).

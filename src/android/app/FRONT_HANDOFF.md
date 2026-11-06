@@ -1,15 +1,15 @@
 # F1: экраны фронтенда — передача Ярику и Сюбику
 
-Статус: исходники трёх экранов подготовлены; Android-сборка и приёмка F1 пока не выполнены.
-База: main `6894b29`, в которой отсутствуют файлы проекта и общая сборка.
+Статус: три экрана перенесены в Android-проект и подключены к сборке после B2.
+`origin/main` влит обычным merge; исходная база bootstrap/contracts — `95cd659`.
+Все Android-пути ниже относительны к `src/android/`.
 
 ## Пути и зависимости
 
 - `feature/import`: ImportScreen и ProcessingScreen, пакет `feature.importaudio`.
 - `feature/transcript`: TranscriptScreen, пакет `feature.transcript`.
 - `app/src/debug`: FrontScreensDemo и только синтетические fixtures.
-- DTO импортируются из `core.contracts`, публичных копий нет. Совместимость пока ориентирована на
-  `origin/feat/ml-device-spike` `427cf4e`; это НЕ согласованные или слитые contracts main.
+- DTO импортируются из merged B2 `core.contracts` (`95cd659`), публичных копий нет.
 
 Для исходников нужны артефакты `androidx.compose.runtime:runtime`,
 `androidx.compose.runtime:runtime-saveable`, `androidx.compose.ui:ui`,
@@ -17,23 +17,24 @@
 `feature/transcript` зависит от проекта contracts; app debug — от обоих feature-модулей и contracts.
 Отдельных navigation, icons и tooling библиотек здесь нет.
 
-Точные версии Compose, Kotlin, Compose compiler и Android Gradle plugin пока не определены:
-в main нет version catalog, Wrapper или toolchain. Версии не угаданы, Gradle-декларации
-не добавлены до согласования общей сборки. Ярик фиксирует совместимые версии, пути модулей,
-namespace и DI-путь; затем front добавляет зависимости своих модулей через общий каталог.
-Эта передача не означает, что зависимости установлены или сборка воспроизводима.
+Оба feature-модуля имеют Gradle-декларации и Android manifests. Все зависимости берутся
+из общего version catalog: Compose BOM 2024.09.03, Kotlin/Compose compiler plugin 2.0.21,
+AGP 8.5.2. Новых версий или aliases front не добавляет. `settings.gradle.kts`
+подключает `:feature:import` и `:feature:transcript` по согласованию с Яриком;
+app зависит от обоих. DTO и сборка core/engine не менялись.
 
-## Подключение после bootstrap
+## Запуск и оставшаяся проверка
 
-1. Слить общую сборку и согласованные contracts; проверить package и сигнатуры импортов.
-2. Объявить согласованные зависимости feature-модулей; app подключает модули через back.
-3. В debug entry point вызвать `FrontScreensDemo()` внутри Android Activity и передать
-   безопасные window insets из app-host. Production entry point не должен ссылаться на demo.
-4. Выполнить сборку, lint и UI-проверку на Android, включая крупный шрифт и поворот.
-5. Проверить, что release source set не содержит fixtures и debug entry point.
+1. Из `src/android/`: `./gradlew assembleDebug test lint`.
+2. Установить debug APK и пройти три экрана. MainActivity вызывает variant-specific AppContent:
+   debug открывает FrontScreensDemo, release показывает честный статус отсутствующего pipeline.
+   Fixtures и ссылка на demo остаются в debug source set. Insets обрабатывает main Activity.
+3. Проверить крупный шрифт, поворот, отмену, повтор, длинную и пустую расшифровки на Android.
+4. Дополнительно проверить release: `./gradlew assembleRelease`.
 
 В текущем окружении `java -version` не находит Java Runtime; Gradle не найден в PATH,
-Android SDK отсутствует в стандартном `~/Library/Android/sdk`. Сборка не запускалась.
+Android SDK отсутствует в стандартном `~/Library/Android/sdk`. Локальная команда сборки
+останавливается до Gradle из-за отсутствия Java Runtime; результат CI фиксируется в PR.
 Фактические требования установки передать в docs/SETUP.md через Сюбика после bootstrap.
 
 ## Ручной сценарий для Сюбика
@@ -47,7 +48,10 @@ Android SDK отсутствует в стандартном `~/Library/Android/
 
 Экраны не запускают jobs при композиции. URI/file picker — F2, lifecycle/start/observe/cancel — F3,
 выбор назначения и настоящий экспорт — F4. До согласования back API собственных версий API нет.
-Нужно получить у Ярика merged SHA contracts, точные start/observe/cancel, типы ошибок и экспорт API.
+API B2 подтверждён: `start(audioUri: String): String` возвращает jobId,
+`observe(jobId): StateFlow<PipelineState>`, `cancel(jobId)`,
+`TranscriptExporter.export(result, destinationUri: String): Result<Unit>` (suspend).
+Реализации pipeline/exporter пока не слиты; запуск и экспорт в release не имитируются.
 
 Основной reviewer — Ярик (@lockermon4); дополнительная UX-проверка — Сюбик (@bondarjuice).
 Ревью запрашивается после снятия Draft и зелёного CI на актуальном HEAD.
@@ -120,6 +124,6 @@ Android SDK отсутствует в стандартном `~/Library/Android/
    Фактический автоматический сброс апрува обеспечивает серверная защита GitHub,
    наличие Markdown-правила само по себе её не включает.
 
-Для текущего #1: основной reviewer — @lockermon4; дополнительные обязательные
-reviewers определяются заново по итоговому diff после bootstrap/B2 и переноса.
-Пока #1 в Draft, запрос апрува не отправляется.
+Для #1: основной reviewer — @lockermon4, также владелец согласованных Gradle/settings изменений.
+При готовности CI передать ему ссылку с пометкой «на ревью Claude», поскольку PR
+включает интеграцию feature-модулей и app. Пока #1 в Draft, запрос апрува не отправляется.

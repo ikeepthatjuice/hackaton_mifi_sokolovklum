@@ -42,15 +42,20 @@ android {
 
 dependencies {
     implementation(project(":core:contracts"))
+    implementation(project(":feature:import"))
+    implementation(project(":feature:transcript"))
 
     implementation(libs.androidx.core.ktx)
     implementation(libs.androidx.activity.compose)
     implementation(libs.androidx.lifecycle.runtime.ktx)
     implementation(platform(libs.compose.bom))
     implementation(libs.compose.ui)
+    implementation(libs.compose.foundation)
     implementation(libs.compose.material3)
     implementation(libs.compose.ui.tooling.preview)
     debugImplementation(libs.compose.ui.tooling)
+    debugImplementation(libs.compose.runtime)
+    debugImplementation(libs.compose.runtime.saveable)
 
     testImplementation(libs.junit)
 }

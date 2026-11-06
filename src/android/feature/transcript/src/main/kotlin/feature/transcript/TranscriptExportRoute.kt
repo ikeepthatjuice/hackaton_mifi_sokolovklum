@@ -13,6 +13,9 @@ import androidx.lifecycle.viewModelScope
 import androidx.lifecycle.viewmodel.compose.viewModel
 import core.contracts.TranscriptExporter
 import core.contracts.TranscriptResult
+import java.time.LocalDateTime
+import java.time.format.DateTimeFormatter
+import java.util.Locale
 
 internal class JsonExportViewModel(exporter: TranscriptExporter) : ViewModel() {
     val session = JsonExportSession(exporter, viewModelScope)
@@ -43,7 +46,7 @@ fun TranscriptExportRoute(
         onSaveJson = {
             if (owner.session.beginPicking(result)) {
                 try {
-                    picker.launch("transcript.json")
+                    picker.launch("transcript-${LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd-HHmmss", Locale.ROOT))}.json")
                 } catch (_: Exception) {
                     owner.session.pickerFailed()
                 }

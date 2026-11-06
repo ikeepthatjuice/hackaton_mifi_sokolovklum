@@ -24,7 +24,7 @@ class ContentResolverTranscriptExporterTest {
         TranscriptResult("job", 2000, listOf(Utterance("u0", "speaker_1", 0, endMs, "raw", text)))
 
     @Test
-    fun writesJsonAndTruncatesOnOverwrite() = runBlocking {
+    fun writesJsonAndTruncatesOnOverwrite(): Unit = runBlocking {
         val file = File(context.cacheDir, "export-test.json").apply { delete() }
         val uri = Uri.fromFile(file).toString()
 
@@ -39,7 +39,7 @@ class ContentResolverTranscriptExporterTest {
     }
 
     @Test
-    fun invalidDataOrDestinationIsExportFailed() = runBlocking {
+    fun invalidDataOrDestinationIsExportFailed(): Unit = runBlocking {
         val invalid = exporter.export(result("x", endMs = 5000), Uri.fromFile(File(context.cacheDir, "x.json")).toString())
         val badUri = exporter.export(result("x"), "content://no.such.provider/doc")
         for (r in listOf(invalid, badUri)) {

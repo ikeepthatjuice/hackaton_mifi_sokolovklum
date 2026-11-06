@@ -21,6 +21,14 @@ jobs:
         with:
           submodules: recursive
 
+      # Runner has ~6.8 GB free, the API 34 emulator needs ~7.4 GB for userdata (disk-size cannot go below the image).
+      # Remove preinstalled toolchains we never use; Android SDK/NDK stay.
+      - name: Free disk space
+        run: |
+          df -h /
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          df -h /
+
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
@@ -67,8 +75,6 @@ jobs:
           arch: x86_64
           target: google_apis
           force-avd-creation: false
-          # Runner has ~6.8 GB free; default userdata needs ~7.4 GB and the emulator dies at start.
-          disk-size: 2048M
           emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
           script: echo "AVD snapshot generated"
@@ -82,7 +88,6 @@ jobs:
           ndk: 26.1.10909125
           cmake: 3.22.1
           force-avd-creation: false
-          disk-size: 2048M
           emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: src/android

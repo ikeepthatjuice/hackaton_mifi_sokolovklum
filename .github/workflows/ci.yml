@@ -29,5 +29,7 @@ jobs:
       # Проверяет gradle-wrapper.jar по официальным хешам и кэширует зависимости.
       - uses: gradle/actions/setup-gradle@v4
 
+      # Android-проект лежит в src/android по шаблону организаторов.
       - name: Build, unit tests, lint
+        working-directory: src/android
         run: ./gradlew --no-daemon assembleDebug test lint

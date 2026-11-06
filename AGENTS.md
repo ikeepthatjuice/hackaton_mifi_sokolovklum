@@ -8,14 +8,22 @@
 2. Проверь `git status` и текущую ветку. Ветка задачи: `feat/<роль>-<задача>` от актуальной `main`. Роли: `back`, `front`, `ml`, `llm-qa`.
 3. Нет назначенной роли/задачи — спроси, не придумывай.
 
+## Структура (шаблон организаторов grigorevmp/hacathon_template)
+
+Android-проект (Gradle) — в `src/android/`; все команды сборки запускаются оттуда. В корне — документы сдачи (`docs/`, `artifacts/`, `README.md`), `models/`, `scripts/`, `.github/`.
+
 ## Владельцы путей
+
+Пути модулей ниже — относительно `src/android/`.
 
 | Роль | Пути |
 |---|---|
-| back (Ярик) | `core/*`, `.github/`, корневые `*.gradle.kts`, `gradle/`, `gradle.properties`, `models/manifest.json`, `scripts/`, `app/src/main/kotlin/com/neurostenographer/app/di/`, `AGENTS.md`, `.gitignore` |
+| back (Ярик) | `core/*`, `*.gradle.kts`, `gradle/`, `gradle.properties`, `app/src/main/kotlin/com/neurostenographer/app/di/`; в корне: `.github/`, `models/manifest.json`, `scripts/`, `AGENTS.md`, `.gitignore` |
 | front (Санёк) | `feature/import/`, `feature/transcript/`, остальной `app/` |
 | ml (Илья) | `engine/asr/`, `engine/diarization/`, `engine/alignment/` |
-| llm-qa (Сюбик) | `engine/llm/`, `quality/`, `docs/`, `demo/`, `README.md` (по согласованию с back) |
+| llm-qa (Сюбик) | `engine/llm/`, `quality/`; в корне: `docs/`, `artifacts/`, `demo/`, `README.md`, `src/README.md` (по согласованию с back) |
+
+Модели поставляются внутри APK (эксперты только устанавливают APK, без adb и сети); веса в git не коммитятся.
 
 Чужие пути меняем только после согласования с владельцем. Зависимости модулей: UI → pipeline → contracts; engines реализуют contracts и не импортируют UI и друг друга.
 
@@ -33,7 +41,7 @@
 ```bash
 git status && git diff --cached --stat
 bash scripts/check-forbidden.sh
-./gradlew assembleDebug test lint
+(cd src/android && ./gradlew assembleDebug test lint)
 ```
 
 Остановись, если в staged-файлах есть реальные записи, эталоны, ключи или выводы кейса.

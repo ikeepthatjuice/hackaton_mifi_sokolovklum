@@ -19,7 +19,13 @@ Debug-only FrontExportDemo пишет фиксированный синтети�
 ошибка/повтор, callback без pending result и CancellationException. Device SAF/export сценарии пока NOT RUN.
 Зависимости только из общего каталога; Lifecycle Compose/ViewModel aliases запрошены
 у Ярика на существующей версии 2.8.6. До их появления и результата CI сборка не подтверждена.
-Локально JDK отсутствует. Команда: cd src/android && ./gradlew assembleDebug test lint.
+SAF имя: transcript-yyyy-MM-dd-HHmmss.json (время устройства).
+Ночная проверка в отдельном detached integration checkout с back #18/#19:
+Temurin JDK17, SDK34; assembleDebug test lint assembleDebugAndroidTest — PASS.
+Все 6 JsonExportSessionTest прошли в debug/release. Это не CI ветки #15:
+его build красный до merge catalog #19 в main, Draft сохраняется.
+Device SAF/экспорт ещё NOT RUN. Back commits в опубликованную ветку не включены.
+Команда: cd src/android && ./gradlew assembleDebug test lint.
 
 Ветка независима от F3 по production-файлам; при интеграции debug AppContent сохранить
 F3 PipelineRoute и подключить TranscriptExportRoute в его resultContent. Core/engine/DI

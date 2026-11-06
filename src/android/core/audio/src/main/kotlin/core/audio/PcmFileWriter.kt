@@ -43,10 +43,8 @@ internal class PcmFileWriter(
     }
 
     override fun close() {
-        guard {
-            flushBuffer()
-            stream.close()
-        }
+        // use{} closes the stream even if the final flush fails, keeping the flush error primary.
+        guard { stream.use { flushBuffer() } }
     }
 
     private fun flush() = guard { flushBuffer() }

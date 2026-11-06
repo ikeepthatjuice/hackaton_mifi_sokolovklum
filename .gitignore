@@ -1,4 +1,4 @@
-# Case data protection (STRICT RULE: NO CASE DATA IN REPO)
+# Данные кейса и локальные результаты — никогда в git (PROJECT_PLAN §9)
 /case_data/
 /local_models/
 /local_outputs/
@@ -8,22 +8,28 @@
 .env
 .env.*
 !.env.example
-local.properties
 *.jks
 *.keystore
 
-# Model weights (tracked via models/manifest.json, not committed directly)
+# Веса моделей: описываются в models/manifest.json, сами файлы не коммитим
 *.bin
 *.onnx
 *.gguf
 *.pt
 *.tflite
 
-# Build outputs & caches
+# Сборка, кэши, IDE
 build/
 .gradle/
+.kotlin/
+.cxx/
+.externalNativeBuild/
+captures/
+local.properties
 .idea/
 *.iml
-.cxx/
-local.properties
+.DS_Store
 
+# Python-окружения тестов
+.venv/
+__pycache__/

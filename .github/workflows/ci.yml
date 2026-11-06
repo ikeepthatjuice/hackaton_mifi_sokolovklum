@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
+
+      - name: Forbidden files
+        run: bash scripts/check-forbidden.sh
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      # Проверяет gradle-wrapper.jar по официальным хешам и кэширует зависимости.
+      - uses: gradle/actions/setup-gradle@v4
+
+      # Android-проект лежит в src/android по шаблону организаторов.
+      - name: Build, unit tests, lint
+        working-directory: src/android
+        run: ./gradlew --no-daemon assembleDebug test lint

@@ -1,0 +1,46 @@
+{
+  "version": "1.0",
+  "updated_at": "2026-11-06",
+  "models": [
+    {
+      "name": "whisper-base-multilingual",
+      "target_file": "ggml-base.bin",
+      "description": "Whisper Base Multilingual for offline ASR with token-level timestamps",
+      "role": "ASR",
+      "format": "GGML",
+      "source_url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
+      "license": "MIT",
+      "size_bytes": 147964211,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf00eec29073ba81a4d4ea8aec",
+      "memory_ram_mb": 160,
+      "device_path": "/data/local/tmp/models/ggml-base.bin"
+    },
+    {
+      "name": "silero-vad",
+      "target_file": "silero_vad.onnx",
+      "description": "Silero Voice Activity Detector for offline segmentation",
+      "role": "Diarization / VAD",
+      "format": "ONNX",
+      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/silero_vad.onnx",
+      "license": "MIT",
+      "size_bytes": 1827490,
+      "sha256": "7a3563969bcbe63cd3187b8f04746f34316279f6e6aa45550dfb0b92d6e4b854",
+      "memory_ram_mb": 15,
+      "device_path": "/data/local/tmp/models/silero_vad.onnx"
+    },
+    {
+      "name": "campplus-speaker-embedding",
+      "target_file": "3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx",
+      "description": "3D-Speaker Cam++ speaker embedding extractor trained on VoxCeleb + Russian speech",
+      "role": "Diarization / Embedding",
+      "format": "ONNX",
+      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx",
+      "license": "Apache-2.0",
+      "size_bytes": 28941235,
+      "sha256": "3cb40ff8d1796d11f6c4d7ecfef0f74577881c1626f2f01fbf9f42d2a45a31a9",
+      "memory_ram_mb": 40,
+      "device_path": "/data/local/tmp/models/3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx"
+    }
+  ]
+}
+

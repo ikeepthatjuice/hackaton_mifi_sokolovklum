@@ -1,0 +1,29 @@
+# Case data protection (STRICT RULE: NO CASE DATA IN REPO)
+/case_data/
+/local_models/
+/local_outputs/
+/local_recordings/
+/local_reports/
+/secrets/
+.env
+.env.*
+!.env.example
+local.properties
+*.jks
+*.keystore
+
+# Model weights (tracked via models/manifest.json, not committed directly)
+*.bin
+*.onnx
+*.gguf
+*.pt
+*.tflite
+
+# Build outputs & caches
+build/
+.gradle/
+.idea/
+*.iml
+.cxx/
+local.properties
+

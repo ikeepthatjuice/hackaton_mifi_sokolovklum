@@ -15,10 +15,12 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalDensity
 import androidx.compose.ui.unit.Density
+import core.contracts.PipelineError
 import core.contracts.TranscriptResult
 import core.contracts.Utterance
 import feature.importaudio.ImportScreen
 import feature.importaudio.ProcessingScreen
+import feature.importaudio.PipelineFailureScreen
 import feature.transcript.TranscriptScreen
 
 /** Synthetic layout harness for font/rotation/scroll tests; does not run models or export files. */
@@ -35,11 +37,15 @@ class FrontUxPreviewActivity : ComponentActivity() {
                     Surface(Modifier.fillMaxSize().safeDrawingPadding()) {
                         when (screen) {
                             "processing" -> ProcessingScreen("Синтетическое аудио", "Распознавание речи", { screen = "import" })
-                            "transcript" -> TranscriptScreen(
+                            "storage" -> PipelineFailureScreen(
+                                PipelineError.INSUFFICIENT_STORAGE, {}, { screen = "import" }, requiredBytes = 1_048_577,
+                            )
+                            "transcript", "saving" -> TranscriptScreen(
                                 result = longSyntheticResult,
                                 onSaveJson = { saved = true },
                                 onChooseAnotherAudio = { screen = "import" },
                                 exportAvailable = true,
+                                exportInProgress = screen == "saving",
                                 exportMessage = if (saved) "Проверен callback кнопки (файл не записывался)" else null,
                             )
                             else -> ImportScreen("Синтетическое аудио", {}, { screen = "processing" })

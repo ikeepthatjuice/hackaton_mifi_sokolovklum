@@ -4,6 +4,7 @@ import android.content.Intent
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
 import androidx.compose.ui.test.assertIsDisplayed
+import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
@@ -43,6 +44,23 @@ class FrontLayoutTest {
             compose.onNodeWithText("Распознавание речи").performScrollTo().assertIsDisplayed()
             compose.onNodeWithText("Отменить").performScrollTo().assertIsDisplayed().performClick()
             compose.onNodeWithText("Начать обработку").performScrollTo().assertIsDisplayed()
+        }
+    }
+
+    @Test fun storageBytesRoundUpAndActionsStayReachable() {
+        launch("storage").use {
+            compose.onNodeWithText("Освободите 2 МБ").assertIsDisplayed()
+            compose.onNodeWithText("Повторить").performScrollTo().assertIsDisplayed()
+            compose.onNodeWithText("Выбрать другое аудио").performScrollTo().assertIsDisplayed().performClick()
+            compose.onNodeWithText("Начать обработку").performScrollTo().assertIsDisplayed()
+        }
+    }
+
+    @Test fun exportButtonIsDisabledWhileSaving() {
+        launch("saving").use {
+            compose.onNode(hasScrollAction()).performScrollToNode(hasText("Сохранение…"))
+            compose.onNodeWithText("Сохранение…").assertIsDisplayed().assertIsNotEnabled()
+            compose.onNodeWithText("Выбрать другое аудио").performScrollTo().assertIsDisplayed()
         }
     }
 

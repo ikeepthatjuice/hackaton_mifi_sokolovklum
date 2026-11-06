@@ -35,5 +35,12 @@ attach без start, подтверждённая отмена, запрет н�
 закрытие владельца, безопасное округление storage, retry после storage, защита Completed от поздней ошибки. Это не UI/device-тесты.
 Команды: bash scripts/check-forbidden.sh;
 cd src/android && ./gradlew assembleDebug test lint.
-Локального JDK нет; до результата CI успех тестов/сборки не заявлен.
+Ночная локальная интеграция (detached checkout, с back #18/#19, не опубликованная ветка):
+Temurin JDK17 / SDK34; assembleDebug test lint assembleDebugAndroidTest — PASS.
+16 import unit tests (9 PipelineSession + 7 controller) в debug/release — PASS.
+Стенд FrontUxPreviewActivity только src/debug, 500 вымышленных реплик, fontScale 2.0.
+4 FrontLayoutTest: landscape/recreate, длинный список, storage ceil, disabled Save.
+Компиляция androidTest — PASS; запуск на эмуляторе пока NOT RUN.
+CI самого #14 красный до merge catalog #19 в main; Draft сохраняется.
+Back commits не включены в опубликованную front-ветку.
 Reviewer: Ярик @lockermon4; интеграцию также передать «на ревью Claude» через него.

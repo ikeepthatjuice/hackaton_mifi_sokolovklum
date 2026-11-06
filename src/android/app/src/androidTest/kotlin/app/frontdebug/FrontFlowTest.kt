@@ -1,6 +1,7 @@
 package app.frontdebug
 
 import android.content.ContentValues
+import android.graphics.Bitmap
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.provider.MediaStore
@@ -14,6 +15,7 @@ import org.json.JSONObject
 import org.junit.Assert.*
 import org.junit.Test
 import org.junit.runner.RunWith
+import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
@@ -36,6 +38,8 @@ class FrontFlowTest {
         try {
             requireNotNull(resolver.openOutputStream(source)).use { it.write(silentWav()) }
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
+                waitText("Выбрать аудио")
+                capture("front-import")
                 clickText("Выбрать аудио")
                 // Cancel the first picker: the screen must remain usable.
                 waitFor { find { it.packageName?.toString()?.contains("documentsui") == true } }
@@ -54,6 +58,7 @@ class FrontFlowTest {
                 scenario.recreate()
                 waitText("Расшифровка", 30_000)
                 waitText("Реплик: 2")
+                capture("front-result")
                 // The retained result must survive another Activity recreation.
                 scenario.recreate()
                 waitText("Расшифровка")
@@ -70,6 +75,7 @@ class FrontFlowTest {
                 }
                 click(save)
                 waitText("JSON сохранён", 15_000)
+                capture("front-json-saved")
                 val json = JSONObject(shell("cat /sdcard/Download/${exportName!!}"))
                 assertEquals(setOf("transcript"), json.keys().asSequence().toSet())
                 val transcript = json.getJSONArray("transcript")
@@ -81,7 +87,11 @@ class FrontFlowTest {
                     assertTrue(item.getString("text").isNotBlank())
                 }
                 clickText("Выбрать другое аудио")
-                waitText("Выбрать аудио")
+                click(waitFor { find { it.text?.toString() in setOf("Выбрать аудио", "Выбрать другой файл") } })
+                chooseDownloads()
+                clickText(name)
+                clickText("Начать обработку")
+                waitText("Расшифровка", 30_000)
             }
         } finally {
             resolver.delete(source, null, null)
@@ -102,7 +112,10 @@ class FrontFlowTest {
         if (navigation != null) {
             click(navigation)
             val downloads = waitFor {
-                find { it.text?.toString()?.lowercase() in setOf("downloads", "загрузки", "скачанные файлы") }
+                find {
+                    it.viewIdResourceName == "android:id/title" &&
+                        it.text?.toString()?.lowercase() in setOf("downloads", "загрузки", "скачанные файлы")
+                }
             }
             click(downloads)
         } else {
@@ -132,11 +145,25 @@ class FrontFlowTest {
             block()?.let { return it }
             SystemClock.sleep(100)
         }
+        capture("front-test-timeout")
         throw AssertionError("Timed out waiting for expected synthetic test UI")
     }
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
         automation.executeShellCommand(command),
     ).bufferedReader().use { it.readText() }
+
+    private fun capture(name: String) {
+        // Accessibility may switch windows before SurfaceFlinger draws the returning Activity.
+        instrumentation.waitForIdleSync()
+        runCatching { automation.waitForIdle(200, 2_000) }
+        SystemClock.sleep(200)
+        automation.takeScreenshot()?.let { bitmap ->
+            File(instrumentation.targetContext.cacheDir, "$name.png").outputStream().use {
+                bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)
+            }
+            bitmap.recycle()
+        }
+    }
 
     private fun silentWav(): ByteArray {
         val samples = 3 * 16_000

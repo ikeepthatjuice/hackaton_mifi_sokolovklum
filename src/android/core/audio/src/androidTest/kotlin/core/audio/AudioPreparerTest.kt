@@ -4,6 +4,9 @@ import android.net.Uri
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.platform.app.InstrumentationRegistry
 import core.contracts.PipelineError
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.asCoroutineDispatcher
+import kotlinx.coroutines.launch
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
@@ -14,6 +17,8 @@ import org.junit.runner.RunWith
 import java.io.File
 import java.nio.ByteBuffer
 import java.nio.ByteOrder
+import java.util.concurrent.CountDownLatch
+import java.util.concurrent.Executors
 import kotlin.math.PI
 import kotlin.math.abs
 import kotlin.math.sin
@@ -69,5 +74,41 @@ class AudioPreparerTest {
             assertEquals(PipelineError.UNSUPPORTED_FORMAT, e.error)
         }
         assertFalse(File(context.filesDir, "jobs/junk-job/audio.f32").exists())
+    }
+
+    @Test
+    fun cancelWhileResultIsHandedBackRemovesFileAndRerunWorks() = runBlocking {
+        val wav = File(context.cacheDir, "boundary.wav")
+        writeWav(wav, rate = 48000, channels = 2, seconds = 2.0, freq = 1000.0)
+        val uri = Uri.fromFile(wav).toString()
+        val out = File(context.filesDir, "jobs/boundary-job/audio.f32")
+        out.delete()
+
+        val caller = Executors.newSingleThreadExecutor()
+        val dispatcher = caller.asCoroutineDispatcher()
+        val job = CoroutineScope(dispatcher).launch { preparer.prepare(uri, "boundary-job") }
+
+        waitUntil { out.exists() } // inside withContext(IO) now
+        val release = CountDownLatch(1)
+        caller.execute { release.await() } // caller thread busy: the result cannot be delivered back
+        waitUntil { out.length() == 32000L * 4 } // IO body wrote and closed the whole file
+        Thread.sleep(300) // let codec release finish
+        job.cancel()
+        release.countDown()
+        job.join()
+
+        assertFalse("partial PCM left after cancel", out.exists())
+        val again = preparer.prepare(uri, "boundary-job")
+        assertEquals(2000L, again.durationMs)
+        assertTrue(File(again.pcmFilePath).exists())
+        dispatcher.close()
+    }
+
+    private fun waitUntil(condition: () -> Boolean) {
+        val deadline = System.currentTimeMillis() + 15_000
+        while (!condition()) {
+            if (System.currentTimeMillis() > deadline) fail("condition not reached in 15 s")
+            Thread.sleep(5)
+        }
     }
 }

@@ -13,12 +13,8 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.ensureActive
 import kotlinx.coroutines.withContext
-import java.io.BufferedOutputStream
 import java.io.File
-import java.io.FileOutputStream
 import java.io.IOException
-import java.nio.ByteBuffer
-import java.nio.ByteOrder
 import kotlin.coroutines.coroutineContext
 
 /**
@@ -45,13 +41,24 @@ private fun insufficientStorage(required: Long, available: Long, cause: Throwabl
  * `filesDir/jobs/<jobId>/audio.f32` (mono, 16 kHz, float32 LE) and its [AudioInput].
  *
  * durationMs is computed from the decoded samples, not container metadata.
- * Runs on Dispatchers.IO and is cancellable; a partial file is removed on any failure.
+ * Runs on Dispatchers.IO and is cancellable; a partial file is removed on any failure,
+ * including a cancel that lands while the result is handed back from the IO dispatcher.
  */
 class AudioPreparer(private val context: Context) {
 
-    suspend fun prepare(audioUri: String, jobId: String): AudioInput = withContext(Dispatchers.IO) {
+    suspend fun prepare(audioUri: String, jobId: String): AudioInput {
         require(JOB_ID.matches(jobId)) { "jobId must match ${JOB_ID.pattern}: $jobId" }
         val out = File(context.filesDir, "jobs/$jobId/audio.f32")
+        // Cleanup outside withContext: its prompt cancellation can throw after the body already finished.
+        try {
+            return withContext(Dispatchers.IO) { prepareOnIo(audioUri, out) }
+        } catch (e: Throwable) {
+            out.delete()
+            throw e
+        }
+    }
+
+    private suspend fun prepareOnIo(audioUri: String, out: File): AudioInput {
         out.parentFile?.mkdirs()
         val extractor = MediaExtractor()
         var codec: MediaCodec? = null
@@ -72,7 +79,8 @@ class AudioPreparer(private val context: Context) {
             val format = extractor.getTrackFormat(track)
 
             val durationUs = if (format.containsKey(MediaFormat.KEY_DURATION)) format.getLong(MediaFormat.KEY_DURATION) else null
-            checkFreeSpace(requiredPcmBytes(durationUs))
+            val expectedBytes = requiredPcmBytes(durationUs)
+            checkFreeSpace(expectedBytes)
 
             val mime = format.getString(MediaFormat.KEY_MIME)!!
             // Assign before configure so finally releases the decoder even if configure/start throws.
@@ -90,7 +98,7 @@ class AudioPreparer(private val context: Context) {
             }
 
             val samples = try {
-                decodeTo(extractor, decoder, out)
+                decodeTo(extractor, decoder, out, expectedBytes)
             } catch (e: CancellationException) {
                 throw e // is an IllegalStateException; must not become DECODE_FAILED
             } catch (e: IllegalStateException) {
@@ -100,15 +108,12 @@ class AudioPreparer(private val context: Context) {
             } catch (e: NullPointerException) {
                 throw AudioPreparationException(PipelineError.DECODE_FAILED, "Decoder returned incomplete data", e)
             }
-            AudioInput(
+            return AudioInput(
                 pcmFilePath = out.absolutePath,
                 sampleRateHz = TARGET_SAMPLE_RATE,
                 channels = 1,
                 durationMs = samples * 1000 / TARGET_SAMPLE_RATE,
             )
-        } catch (e: Throwable) {
-            out.delete()
-            throw e
         } finally {
             codec?.runCatching { stop() }
             codec?.runCatching { release() }
@@ -117,25 +122,18 @@ class AudioPreparer(private val context: Context) {
     }
 
     /** Decodes the selected track into [out]; returns the number of 16 kHz samples written. */
-    private suspend fun decodeTo(extractor: MediaExtractor, codec: MediaCodec, out: File): Long {
+    private suspend fun decodeTo(extractor: MediaExtractor, codec: MediaCodec, out: File, expectedBytes: Long?): Long {
         val info = MediaCodec.BufferInfo()
         var resampler: Resampler? = null
         var channels = 0
         var rate = 0
         var isFloat = false
-        var written = 0L
         var inputDone = false
         var idleAfterInput = 0
-        val bytes = ByteBuffer.allocate(64 * 1024).order(ByteOrder.LITTLE_ENDIAN)
 
-        BufferedOutputStream(FileOutputStream(out), 1 shl 16).use { stream ->
-            fun write(samples: FloatArray) {
-                for (s in samples) {
-                    if (bytes.remaining() < BYTES_PER_SAMPLE) flushBytes(bytes, stream)
-                    bytes.putFloat(s)
-                }
-                written += samples.size
-            }
+        val writer = PcmFileWriter(out, expectedBytes, freeBytes = { StatFs(context.filesDir.path).availableBytes })
+        writer.use {
+            fun write(samples: FloatArray) = writer.write(samples)
 
             fun updateFormat(f: MediaFormat) {
                 val newChannels = f.getInteger(MediaFormat.KEY_CHANNEL_COUNT)
@@ -194,23 +192,11 @@ class AudioPreparer(private val context: Context) {
                 }
             }
             resampler?.let { write(it.flush()) }
-            flushBytes(bytes, stream)
         }
-        if (written == 0L) throw AudioPreparationException(PipelineError.DECODE_FAILED, "Decoder produced no audio")
-        return written
-    }
-
-    private fun flushBytes(bytes: ByteBuffer, stream: BufferedOutputStream) {
-        val pending = bytes.position()
-        try {
-            stream.write(bytes.array(), 0, pending)
-        } catch (e: IOException) {
-            // Disk filled up mid-write (duration unknown or estimate too low); other IO errors pass through.
-            val available = StatFs(context.filesDir.path).availableBytes
-            if (available < MIN_FREE_BYTES) throw insufficientStorage(pending.toLong(), available, e)
-            throw e
+        if (writer.samplesWritten == 0L) {
+            throw AudioPreparationException(PipelineError.DECODE_FAILED, "Decoder produced no audio")
         }
-        bytes.clear()
+        return writer.samplesWritten
     }
 
     private fun checkFreeSpace(required: Long?) {
@@ -222,7 +208,6 @@ class AudioPreparer(private val context: Context) {
     private companion object {
         const val TIMEOUT_US = 10_000L
         const val MAX_IDLE_POLLS = 500 // × TIMEOUT_US ≈ 5 s without output after input ended
-        const val MIN_FREE_BYTES = 1L shl 20
         // jobId becomes a directory name; pipeline generates it, this guards against path escape.
         val JOB_ID = Regex("[A-Za-z0-9_-]{1,64}")
     }

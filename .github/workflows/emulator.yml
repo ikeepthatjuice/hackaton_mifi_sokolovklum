@@ -17,17 +17,18 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 45
     steps:
-      - uses: actions/checkout@v4
-        with:
-          submodules: recursive
-
-      # Runner has ~6.8 GB free, the API 34 emulator needs ~7.4 GB for userdata (disk-size cannot go below the image).
-      # Remove preinstalled toolchains we never use; Android SDK/NDK stay.
+      # Runner has ~6.8 GB free, the API 34 emulator needs ~7.4 GB for userdata.
+      # Only preinstalled NDKs are removed; the action installs NDK 26.1.10909125 itself.
       - name: Free disk space
         run: |
           df -h /
-          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /opt/hostedtoolcache/CodeQL
+          sudo rm -rf /usr/share/dotnet /opt/ghc /usr/local/.ghcup /usr/local/share/boost /usr/local/lib/android/sdk/ndk/2* "$AGENT_TOOLSDIRECTORY" || true
+          sudo docker image prune -af || true
           df -h /
+
+      - uses: actions/checkout@v4
+        with:
+          submodules: recursive
 
       - uses: actions/setup-java@v4
         with:
@@ -64,7 +65,7 @@ jobs:
           path: |
             ~/.android/avd/*
             ~/.android/adb*
-          key: avd-34-x86_64
+          key: avd-34-x86_64-v2
 
       # First run boots once and saves a snapshot; later runs start from it.
       - name: Create AVD snapshot
@@ -75,7 +76,7 @@ jobs:
           arch: x86_64
           target: google_apis
           force-avd-creation: false
-          emulator-options: -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -partition-size 2048 -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: false
           script: echo "AVD snapshot generated"
 
@@ -88,7 +89,7 @@ jobs:
           ndk: 26.1.10909125
           cmake: 3.22.1
           force-avd-creation: false
-          emulator-options: -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
+          emulator-options: -partition-size 2048 -no-snapshot-save -no-window -gpu swiftshader_indirect -noaudio -no-boot-anim -camera-back none
           disable-animations: true
           working-directory: src/android
           script: bash ../../scripts/emulator-smoke.sh

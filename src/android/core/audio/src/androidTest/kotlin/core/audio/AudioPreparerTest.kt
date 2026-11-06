@@ -86,22 +86,27 @@ class AudioPreparerTest {
 
         val caller = Executors.newSingleThreadExecutor()
         val dispatcher = caller.asCoroutineDispatcher()
-        val job = CoroutineScope(dispatcher).launch { preparer.prepare(uri, "boundary-job") }
-
-        waitUntil { out.exists() } // inside withContext(IO) now
         val release = CountDownLatch(1)
-        caller.execute { release.await() } // caller thread busy: the result cannot be delivered back
-        waitUntil { out.length() == 32000L * 4 } // IO body wrote and closed the whole file
-        Thread.sleep(300) // let codec release finish
-        job.cancel()
-        release.countDown()
-        job.join()
+        val job = CoroutineScope(dispatcher).launch { preparer.prepare(uri, "boundary-job") }
+        try {
+            waitUntil { out.exists() } // inside withContext(IO) now
+            caller.execute { release.await() } // caller thread busy: the result cannot be delivered back
+            waitUntil { out.length() == 32000L * 4 } // IO body wrote and closed the whole file
+            Thread.sleep(300) // let codec release finish
+            job.cancel()
+            release.countDown()
+            job.join()
 
-        assertFalse("partial PCM left after cancel", out.exists())
-        val again = preparer.prepare(uri, "boundary-job")
-        assertEquals(2000L, again.durationMs)
-        assertTrue(File(again.pcmFilePath).exists())
-        dispatcher.close()
+            assertFalse("partial PCM left after cancel", out.exists())
+            val again = preparer.prepare(uri, "boundary-job")
+            assertEquals(2000L, again.durationMs)
+            assertTrue(File(again.pcmFilePath).exists())
+        } finally {
+            // A failed wait must not leave the worker blocked and stretch the CI run.
+            job.cancel()
+            release.countDown()
+            dispatcher.close()
+        }
     }
 
     private fun waitUntil(condition: () -> Boolean) {

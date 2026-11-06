@@ -49,6 +49,21 @@ class PcmFileWriterTest {
     }
 
     @Test
+    fun failedFinalFlushStillClosesTheFile() {
+        var closed = false
+        val stream = object : OutputStream() {
+            override fun write(b: Int) = Unit
+            override fun write(b: ByteArray, off: Int, len: Int) = throw noSpace
+            override fun close() { closed = true }
+        }
+        val writer = PcmFileWriter(dummy, expectedBytes = 100, freeBytes = { 0 }, open = { stream })
+        writer.write(FloatArray(4)) // stays in the buffer until close
+        val e = assertThrows(AudioPreparationException::class.java) { writer.close() }
+        assertEquals(PipelineError.INSUFFICIENT_STORAGE, e.error)
+        assertTrue("underlying stream must be closed", closed)
+    }
+
+    @Test
     fun noSpaceOnOpenIsInsufficientStorage() {
         val e = assertThrows(AudioPreparationException::class.java) {
             PcmFileWriter(dummy, expectedBytes = 1000, freeBytes = { 0 }, open = { throw noSpace })

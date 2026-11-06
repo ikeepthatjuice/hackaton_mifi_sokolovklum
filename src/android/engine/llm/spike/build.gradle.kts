@@ -4,6 +4,11 @@ plugins {
     id("org.jetbrains.kotlin.android") version "2.0.21"
 }
 
+// Optional external output directory for isolated CI/large GGUF packaging.
+providers.gradleProperty("llmSpikeBuildDir").orNull?.let {
+    layout.buildDirectory.set(file(it))
+}
+
 android {
     namespace = "engine.llm.spike"
     compileSdk = 34

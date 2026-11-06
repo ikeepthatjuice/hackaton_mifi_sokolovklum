@@ -1,0 +1,21 @@
+Offline LLM spike dependencies
+
+llama.cpp — Copyright (c) 2023-2026 The ggml authors.
+Source: https://github.com/ggml-org/llama.cpp
+Revision: 954de248ac6907dd05dc19f0f511ab18f2807a54
+License: MIT; the authoritative copyright and license are in LICENSE-llama.cpp.txt.
+
+Qwen3-0.6B-Q8_0 — Qwen team / Alibaba Cloud.
+Source: https://huggingface.co/Qwen/Qwen3-0.6B-GGUF
+Revision: 23749fefcc72300e3a2ad315e1317431b06b590a
+License: Apache License 2.0, included in LICENSE-Qwen3.txt.
+The model bytes are distributed unmodified; this app only supplies a formatting prompt.
+
+Kotlin standard library 2.0.21 — JetBrains, Apache License 2.0.
+https://github.com/JetBrains/kotlin
+kotlinx.coroutines core/android 1.8.0 — JetBrains, Apache License 2.0.
+https://github.com/Kotlin/kotlinx.coroutines
+The Apache License 2.0 text is included in LICENSE-Qwen3.txt.
+
+Android system APIs and NDK C++ runtime are used by the test application.
+This is a separate development experiment, not the team's production application.

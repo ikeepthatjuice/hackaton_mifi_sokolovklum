@@ -2,7 +2,7 @@
 
 Ветка: feat/llm-qa-model. Основа main на старте: 6894b29b0c43f1edc27969b2825fe387e00ab15c (пустой initial commit). PR #1, #2, #3 проверены как открытые, не слиты. Общую сборку, contracts, model manifest, CI и app/DI эта ветка не меняет.
 
-Прочитаны приложенные PROJECT_PLAN.md v3.0, SYUBIK_LLM_QA.md, TEAM_START.md. Санёк уже APPROVED PR #3 f09c91f (19:31 UTC); дополнительный approval не создавался. B2 от Ярика среди существующих PR пока нет. В main нет AGENTS.md: прочитано предложение из PR #3 f09c91f, принято расположение модулей src/android/. Типы для проверки взяты без изменений из PR #2 427cf4e, core/contracts/Contracts.kt. Это НЕ утверждённые merged contracts. Их копия в этой ветке не создаётся. До согласования и слияния bootstrap/contracts этот PR не готов к merge.
+Прочитаны приложенные PROJECT_PLAN.md v3.0, SYUBIK_LLM_QA.md, TEAM_START.md. Санёк уже APPROVED PR #3 f09c91f (19:31 UTC); дополнительный approval не создавался. После старта появился B2 PR #5, SHA 662c71688f0df5a349b3c750388bb6af803ea16b: проверен фактический diff, LLM-модуль с этими исходниками прошёл 28 tests (4 contracts +24 LLM/JNI). Как потребитель Сюбик одобрил этот API; CI на SHA пока отсутствует, B2 не слит. В main нет AGENTS.md: прочитано предложение из PR #3 f09c91f, принято расположение модулей src/android/. Изначально проверялись предложенные типы PR #2 427cf4e; итоговая проверка выполнена на точных Contracts.kt/Pipeline.kt из B2 PR #5 662c716. Это НЕ утверждённые merged contracts. Их копия в этой ветке не создаётся. До согласования и слияния bootstrap/contracts этот PR не готов к merge.
 
 ## Реализация
 
@@ -21,7 +21,7 @@
 
 Официальная модель Qwen/Qwen3-0.6B-GGUF, revision 23749fefcc72300e3a2ad315e1317431b06b590a, Q8_0, 639446688 bytes, Apache-2.0. SHA-256 9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031. Выбрана доступная официальная квантовка, не неподтверждённый Q4 файл. Потребление RAM на телефоне ещё не измерено. Веса и внешние исходники не коммитятся. URL/хеши проверены по метаданным официального HF repository; вес проверяется перед native load.
 
-Kotlin/AGP/coroutines/JUnit берутся из libs aliases bootstrap PR #3: Kotlin 2.0.21, AGP 8.5.2, coroutines 1.8.0, JUnit 4.13.2. В модуле compileSdk 34, minSdk 26, JVM17, NDK26.1.10909125, CMake3.22.1. Корневой каталог версий не изменён.
+В основном модуле Kotlin/AGP/coroutines/JUnit берутся из libs aliases bootstrap PR #3; изолированный spike закрепляет те же версии отдельно, не меняя общий каталог: Kotlin 2.0.21, AGP 8.5.2, coroutines 1.8.0, JUnit 4.13.2. В модуле compileSdk 34, minSdk 26, JVM17, NDK26.1.10909125, CMake3.22.1. Корневой каталог версий не изменён.
 
 ## Предложение общих изменений — выполняет/подтверждает Ярик
 

@@ -50,9 +50,10 @@ bash scripts/check-forbidden.sh
 
 - `.github/workflows/emulator.yml` — на каждый PR в `main` и вручную (Actions → Emulator → Run workflow). Эмулятор API 34 x86_64 (google_apis), сценарий `scripts/emulator-smoke.sh`: установить APK, запустить `MainActivity`, проверить что процесс жив, затем `connectedDebugAndroidTest`.
 - Артефакты в Actions run: `app-debug-<sha>` (APK из CI, 3 дня) и `emulator-report-<sha>` (logcat и отчёты androidTest).
-- Веса в эмулятор кладутся только для тестов: `/sdcard/Android/data/com.neurostenographer.app/files/models`. Финальная доставка — assets внутри APK.
+- Веса для debug-запуска приложения — `/sdcard/Android/data/com.neurostenographer.app/files/models`. Для androidTest engine-модулей — assets тестового APK из `local_models/` (подключаются в build.gradle.kts, только если папка есть; в git не попадают). Финальная доставка — assets внутри APK.
 - Данные кейса в эмулятор и CI не кладём. Для тестов — только `jfk.wav` из submodule whisper.cpp или сгенерированная синтетика.
 - Скорость на эмуляторе (x86_64, swiftshader) — не Android RTF; для метрик нужен реальный телефон.
+- Методика замеров WER/RTF — `docs/Q1_TEST_PLAN.md` (только реальный телефон, commit + хеш APK, cold/warm).
 
 ## Контракт данных (кратко)
 

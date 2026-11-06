@@ -11,6 +11,8 @@ MODELS_SRC="$ROOT/local_models"
 MODELS_DST="/sdcard/Android/data/$PKG/files/models"
 
 adb logcat -c
+# Save logcat on every exit, including a failed installDebug.
+trap 'adb logcat -d > "$ROOT/emulator-logcat.txt"' EXIT
 
 ./gradlew --no-daemon installDebug || exit 1
 
@@ -18,7 +20,6 @@ adb shell am start -W -n "$PKG/.MainActivity"
 sleep 5
 if ! adb shell pidof "$PKG" >/dev/null; then
   echo "APP CRASHED ON START"
-  adb logcat -d > "$ROOT/emulator-logcat.txt"
   exit 1
 fi
 echo "SMOKE OK: $PKG is running"
@@ -30,6 +31,4 @@ fi
 
 test_failed=0
 ./gradlew --no-daemon connectedDebugAndroidTest || test_failed=1
-
-adb logcat -d > "$ROOT/emulator-logcat.txt"
 exit $test_failed

@@ -15,8 +15,10 @@ adb logcat -c
 trap 'adb logcat -d > "$ROOT/emulator-logcat.txt"' EXIT
 
 # Cached AVD keeps the app and module test APKs from a previous run, signed with that runner's debug key.
+adb wait-for-device
+until adb shell pm path android >/dev/null 2>&1; do sleep 2; done # package manager ready
 for p in $(adb shell pm list packages com.neurostenographer | tr -d '\r' | sed 's/^package://'); do
-  adb uninstall "$p" >/dev/null 2>&1 || true
+  echo "uninstall stale $p: $(adb uninstall "$p" 2>&1 | tr -d '\r')"
 done
 ./gradlew --no-daemon installDebug || exit 1
 

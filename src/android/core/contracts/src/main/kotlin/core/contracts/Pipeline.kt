@@ -17,6 +17,7 @@ enum class PipelineError {
     OUT_OF_MEMORY,
     ENGINE_FAILED,
     EXPORT_FAILED,
+    INSUFFICIENT_STORAGE,
     UNKNOWN,
 }
 
@@ -31,7 +32,11 @@ sealed interface PipelineState {
     }
 
     data class Completed(val result: TranscriptResult) : PipelineState
-    data class Failed(val error: PipelineError) : PipelineState
+    /**
+     * [requiredBytes] is set only for [PipelineError.INSUFFICIENT_STORAGE]: how many bytes are missing
+     * (required − available). UI shows "Освободите N МБ", N = ceil(requiredBytes / 1 048 576).
+     */
+    data class Failed(val error: PipelineError, val requiredBytes: Long? = null) : PipelineState
     data object Cancelled : PipelineState
 }
 

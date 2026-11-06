@@ -78,32 +78,24 @@ class WhisperOnDeviceTest {
     }
 
     private fun resolveOrExtractModel(testContext: android.content.Context, appContext: android.content.Context, modelName: String): File {
-        // Option A: check test assets
+        val cacheFile = File(appContext.cacheDir, modelName)
+        if (cacheFile.exists() && cacheFile.length() > 0L) {
+            return cacheFile
+        }
+
         try {
-            val assetStream = testContext.assets.open(modelName)
-            val cacheFile = File(appContext.cacheDir, modelName)
-            if (!cacheFile.exists() || cacheFile.length() == 0L) {
+            testContext.assets.open(modelName).use { assetStream ->
                 FileOutputStream(cacheFile).use { out -> assetStream.copyTo(out) }
             }
-            if (cacheFile.exists() && cacheFile.length() > 0L) {
-                return cacheFile
-            }
-        } catch (_: Exception) {
+        } catch (e: Exception) {
+            throw AssertionError("MODEL_MISSING $modelName: asset not found (${e.message})")
         }
 
-        // Option B: check filesDir/models/
-        val filesDirModel = File(File(appContext.filesDir, "models"), modelName)
-        if (filesDirModel.exists() && filesDirModel.length() > 0L) {
-            return filesDirModel
+        if (!cacheFile.exists() || cacheFile.length() == 0L) {
+            throw AssertionError("MODEL_MISSING $modelName: failed to extract model to cache")
         }
 
-        // Option C: check /sdcard/Android/data/<pkg>/files/models/
-        val externalFilesModel = File(File(appContext.getExternalFilesDir(null), "models"), modelName)
-        if (externalFilesModel.exists() && externalFilesModel.length() > 0L) {
-            return externalFilesModel
-        }
-
-        return File(appContext.cacheDir, modelName)
+        return cacheFile
     }
 
     private fun extractAndConvertWavToFloat32Pcm(

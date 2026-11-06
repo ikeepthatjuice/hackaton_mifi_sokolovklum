@@ -1,32 +1,22 @@
 cmake_minimum_required(VERSION 3.22.1)
 project("whisper_jni")
 
-# Resolve repository root: src/android/engine/asr/src/main/cpp -> 7 levels up
-get_filename_component(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../.." ABSOLUTE)
-set(WHISPER_DIR "${REPO_ROOT}/external/whisper.cpp")
+set(WHISPER_BUILD_TESTS OFF CACHE BOOL "Do not build tests" FORCE)
+set(WHISPER_BUILD_EXAMPLES OFF CACHE BOOL "Do not build examples" FORCE)
+set(BUILD_SHARED_LIBS OFF CACHE BOOL "Build whisper as static library" FORCE)
+
+# Submodule external/whisper.cpp (commit 18503b8)
+set(WHISPER_DIR "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../external/whisper.cpp")
+
+add_subdirectory("${WHISPER_DIR}" "${CMAKE_CURRENT_BINARY_DIR}/whisper_build" EXCLUDE_FROM_ALL)
 
 find_library(log-lib log)
 
-# Collect whisper.cpp and ggml sources from external submodule
-file(GLOB WHISPER_SRCS
-    "${WHISPER_DIR}/whisper.cpp"
-    "${WHISPER_DIR}/ggml.c"
-    "${WHISPER_DIR}/ggml-alloc.c"
-    "${WHISPER_DIR}/ggml-backend.c"
-    "${WHISPER_DIR}/ggml-quants.c"
-)
-
 add_library(whisper_jni SHARED
     whisper_jni.cpp
-    ${WHISPER_SRCS}
-)
-
-target_include_directories(whisper_jni PRIVATE
-    ${CMAKE_CURRENT_SOURCE_DIR}
-    ${WHISPER_DIR}
 )
 
 target_link_libraries(whisper_jni PRIVATE
+    whisper
     ${log-lib}
 )
-

@@ -33,3 +33,6 @@ local.properties
 # Python-окружения тестов
 .venv/
 __pycache__/
+
+# Prebuilt native dependencies
+/external/sherpa-onnx-android/

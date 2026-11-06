@@ -54,6 +54,21 @@ class ContractsTest {
     }
 
     @Test
+    fun failedWithoutRequiredBytesStillWorks() {
+        val failed = PipelineState.Failed(PipelineError.DECODE_FAILED)
+        assertEquals(null, failed.requiredBytes)
+        assertEquals("failed:DECODE_FAILED", describe(failed))
+    }
+
+    @Test
+    fun insufficientStorageCarriesMissingBytes() {
+        val failed = PipelineState.Failed(PipelineError.INSUFFICIENT_STORAGE, requiredBytes = 3L * 1_048_576 + 1)
+        assertEquals("failed:INSUFFICIENT_STORAGE", describe(failed))
+        // UI rounds up: 3 MiB + 1 byte -> "Освободите 4 МБ".
+        assertEquals(4L, (failed.requiredBytes!! + 1_048_575) / 1_048_576)
+    }
+
+    @Test
     fun runningRejectsFractionOutsideUnitRange() {
         assertThrows(IllegalArgumentException::class.java) { PipelineState.Running(Stage.ASR, 1.5f) }
         assertThrows(IllegalArgumentException::class.java) { PipelineState.Running(Stage.ASR, -0.1f) }

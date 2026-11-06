@@ -7,6 +7,7 @@ import android.provider.OpenableColumns
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +47,10 @@ fun AudioImportRoute(
         )
     }
     val controller = rememberSaveable(pipeline, saver = saver) { AudioImportController(pipeline) }
+    // F3 owns the job; clear an old F2 guard when returning after a terminal state.
+    LaunchedEffect(controller, onStartAudio != null) {
+        if (onStartAudio != null) controller.reset()
+    }
     var readingSelection by remember { mutableStateOf(false) }
     var starting by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(LocalAudioDocument()) { uri ->

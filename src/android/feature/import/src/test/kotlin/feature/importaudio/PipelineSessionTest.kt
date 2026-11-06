@@ -100,6 +100,31 @@ class PipelineSessionTest {
         assertNull(session.start("content://synthetic/2"))
     }
 
+    @Test fun storageFailureRetainsMissingBytesAndAllowsRetryAfterReset() = runTest {
+        val pipeline = Pipeline()
+        val session = PipelineSession(pipeline, backgroundScope, StandardTestDispatcher(testScheduler))
+        launch { session.start("content://synthetic/1") }; runCurrent()
+        val failure = PipelineState.Failed(PipelineError.INSUFFICIENT_STORAGE, 1_048_577)
+        pipeline.flows.getValue("job-1").value = failure; runCurrent()
+        assertNull(session.state.value.jobId)
+        assertEquals(failure, session.state.value.state)
+        session.reset()
+        assertEquals(PipelineState.Idle, session.state.value.state)
+        launch { session.start("content://synthetic/2") }; runCurrent()
+        assertEquals("job-2", session.state.value.jobId)
+    }
+
+    @Test fun completedResultIsNotReplacedByLateFailure() = runTest {
+        val pipeline = Pipeline()
+        val session = PipelineSession(pipeline, backgroundScope, StandardTestDispatcher(testScheduler))
+        launch { session.start("content://synthetic/1") }; runCurrent()
+        val result = core.contracts.TranscriptResult("job-1", 0, emptyList())
+        pipeline.flows.getValue("job-1").value = PipelineState.Completed(result); runCurrent()
+        pipeline.flows.getValue("job-1").value = PipelineState.Failed(PipelineError.UNKNOWN); runCurrent()
+        assertEquals(PipelineState.Completed(result), session.state.value.state)
+        assertNull(session.state.value.jobId)
+    }
+
     @Test fun missingCapacityRoundsUpWithoutLongOverflow() {
         assertEquals(1L, missingMegabytes(1))
         assertEquals(4L, missingMegabytes(3L * 1_048_576 + 1))

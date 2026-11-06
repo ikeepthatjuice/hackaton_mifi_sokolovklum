@@ -1,11 +1,10 @@
 package feature.importaudio
 
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.Button
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
@@ -48,16 +47,11 @@ fun PipelineRoute(
             is PipelineState.Completed -> resultContent(state.result, owner.session::reset)
             is PipelineState.Failed -> PipelineFailureScreen(
                 error = state.error,
+                requiredBytes = state.requiredBytes,
                 onRetry = { ui.audioUri?.let(owner::start) },
                 onChooseAnotherAudio = owner.session::reset,
             )
-            PipelineState.Cancelled -> Column(
-                modifier = Modifier.padding(24.dp),
-                verticalArrangement = Arrangement.spacedBy(16.dp),
-            ) {
-                Text("Обработка отменена")
-                Button(onClick = owner.session::reset) { Text("Выбрать аудио") }
-            }
+            PipelineState.Cancelled -> LaunchedEffect(owner) { owner.session.reset() }
             else -> if (ui.starting || ui.jobId != null) {
                 ProcessingScreen(
                     audioName = "Выбранное аудио",

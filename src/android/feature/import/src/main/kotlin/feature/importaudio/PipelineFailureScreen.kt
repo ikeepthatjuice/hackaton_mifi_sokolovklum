@@ -28,11 +28,12 @@ fun PipelineFailureScreen(
         verticalArrangement = Arrangement.spacedBy(16.dp),
     ) {
         Text(
-            requiredBytes?.takeIf { it > 0 }?.let { "Освободите ${missingMegabytes(it)} МБ" }
+            requiredBytes?.takeIf { error == PipelineError.INSUFFICIENT_STORAGE && it > 0 }
+                ?.let { "Освободите ${missingMegabytes(it)} МБ" }
                 ?: "Обработка не завершена",
             style = MaterialTheme.typography.headlineMedium,
         )
-        Text(if (requiredBytes != null) "Освободите место на устройстве и повторите обработку." else errorMessage(error))
+        Text(errorMessage(error))
         Button(onClick = onRetry) { Text("Повторить") }
         OutlinedButton(onClick = onChooseAnotherAudio) { Text("Выбрать другое аудио") }
     }
@@ -49,5 +50,6 @@ internal fun errorMessage(error: PipelineError): String = when (error) {
     PipelineError.OUT_OF_MEMORY -> "Не хватает оперативной памяти. Закройте другие приложения."
     PipelineError.ENGINE_FAILED -> "Во время обработки произошла ошибка модели."
     PipelineError.EXPORT_FAILED -> "Не удалось сохранить результат."
+    PipelineError.INSUFFICIENT_STORAGE -> "Не хватает места на устройстве. Освободите место и повторите обработку."
     PipelineError.UNKNOWN -> "Не удалось завершить обработку. Повторите попытку."
 }

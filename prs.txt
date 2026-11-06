@@ -1,0 +1,3 @@
+3	feat(back): B1 bootstrap — Gradle, version catalog, CI, AGENTS.md	feat/back-bootstrap	DRAFT	2026-11-06T18:01:13Z
+2	Feat/ml device spike	feat/ml-device-spike	OPEN	2026-11-06T17:56:04Z
+1	feat(front): подготовить экраны F1 и синтетический debug-сценарий	feat/front-screens	DRAFT	2026-11-06T17:51:50Z

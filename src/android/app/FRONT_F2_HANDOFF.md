@@ -4,7 +4,10 @@
 core/*, engine/* и общий version catalog не менялись. Используются только aliases B2.
 
 - AudioImportRoute запускает ACTION_OPEN_DOCUMENT с audio/* и EXTRA_LOCAL_ONLY.
-- Сохраняется read-grant; display name читается через ContentResolver на IO dispatcher.
+- Постоянный read-grant запрашивается по возможности: SecurityException от этой попытки
+  игнорируется, временного SAF-гранта достаточно для немедленного импорта. Открытие URI
+  и display name проверяются через ContentResolver на IO dispatcher; только их сбой
+  вызывает selectionFailed(). Содержимое аудио при этой проверке не считывается.
 - URI сохраняется целиком строкой, без преобразования в путь, и по кнопке передаётся
   в TranscriptionPipeline.start(audioUri). Возвращённый jobId передаётся host-слою.
 - Отмена picker оставляет прежний выбор; нет выбора — нет запуска. Ошибки доступа
@@ -17,8 +20,9 @@ core/*, engine/* и общий version catalog не менялись. Испол
 
 ## Проверки
 
-Шесть unit-тестов AudioImportControllerTest: отмена с/без прежнего выбора, точная передача
-URI, повторный start, повтор после ошибки, восстановление jobId и CancellationException.
+Семь unit-тестов AudioImportControllerTest: отмена с/без прежнего выбора, точная передача
+URI, повторный start, повтор после ошибки, восстановление jobId, CancellationException
+и reset() с новым выбором в том же экземпляре контроллера. F3 вызывает reset после терминального состояния.
 Команда: `cd src/android && ./gradlew :feature:import:testDebugUnitTest assembleDebug test lint`.
 Локальная команда пока блокируется отсутствием JDK; фактический CI фиксируется в PR.
 

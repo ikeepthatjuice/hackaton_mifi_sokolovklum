@@ -77,4 +77,16 @@ class AudioImportControllerTest {
         assertThrows(CancellationException::class.java) { controller.start() }
         assertNull(controller.errorMessage)
     }
+
+    @Test fun resetAllowsNewSelectionInTheSameController() {
+        val pipeline = Pipeline()
+        val controller = AudioImportController(pipeline)
+        controller.acceptSelection("content://synthetic/first", "first.wav")
+        assertEquals("job-1", controller.start())
+        controller.reset()
+        assertNull(controller.jobId)
+        controller.acceptSelection("content://synthetic/second", "second.wav")
+        assertEquals("job-2", controller.start())
+        assertEquals(listOf("content://synthetic/first", "content://synthetic/second"), pipeline.startedUris)
+    }
 }

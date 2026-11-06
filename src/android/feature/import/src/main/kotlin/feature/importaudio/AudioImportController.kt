@@ -34,6 +34,12 @@ internal class AudioImportController(
         errorMessage = "Не удалось получить доступ к файлу. Выберите аудио ещё раз."
     }
 
+    /** Called after Completed/Failed/Cancelled before returning to the import screen. */
+    fun reset() {
+        jobId = null
+        errorMessage = null
+    }
+
     fun start(): String? {
         jobId?.let { return it }
         val uri = audioUri ?: return null

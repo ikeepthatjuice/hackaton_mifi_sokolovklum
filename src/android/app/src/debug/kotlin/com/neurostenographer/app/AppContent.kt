@@ -1,9 +1,21 @@
 package com.neurostenographer.app
 
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
-import app.frontdebug.FrontScreensDemo
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.neurostenographer.app.di.rememberAppGraph
 
 @Composable
 internal fun AppContent() {
-    FrontScreensDemo()
+    val graph = rememberAppGraph()
+    Column {
+        Text(
+            "DEBUG · Настоящие импорт и экспорт. Движки синтетические, модели не запускались.",
+            modifier = Modifier.padding(16.dp),
+        )
+        AppFlow(graph.pipeline, graph.exporter, Modifier.weight(1f))
+    }
 }

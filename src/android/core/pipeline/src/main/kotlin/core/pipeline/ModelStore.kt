@@ -27,7 +27,8 @@ fun interface ModelStore {
  * If `assets/models/manifest.json` exists, the copy is checked against its `sha256` and `size_bytes`.
  *
  * The phone needs the asset size free on top of the APK (weights exist twice); checked with StatFs first.
- * Exact asset size needs the weights stored uncompressed in the APK (noCompress in the app build).
+ * Size comes from the uncompressed asset (noCompress in the app build) or, for a compressed one,
+ * from `size_bytes` in the manifest. If neither is known the model is MODEL_MISSING: no blind copy.
  */
 class AssetModelStore(private val context: Context) : ModelStore {
 
@@ -43,21 +44,26 @@ class AssetModelStore(private val context: Context) : ModelStore {
             val size = assetLength(assetPath) ?: expected?.sizeBytes
             val target = File(modelsDir, name)
             // Reuse only a file of the expected size; a different size means new weights after an app update.
-            if (target.exists() && (size == null || target.length() == size)) return@withContext target
+            if (size != null && target.exists() && target.length() == size) return@withContext target
 
             val input = try {
                 context.assets.open(assetPath)
             } catch (e: FileNotFoundException) {
                 throw PipelineFailure(PipelineError.MODEL_MISSING, cause = e)
             }
+            if (size == null) {
+                input.close()
+                throw PipelineFailure(
+                    PipelineError.MODEL_MISSING,
+                    detail = "size of $assetPath unknown: asset is compressed and has no size_bytes in manifest",
+                )
+            }
             modelsDir.mkdirs()
-            if (size != null) {
-                // A stale target is replaced, so its space counts as free.
-                val available = freeBytes() + (if (target.exists()) target.length() else 0L)
-                if (available < size) {
-                    input.close()
-                    throw PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, size - available)
-                }
+            // A stale target is replaced, so its space counts as free.
+            val available = freeBytes() + (if (target.exists()) target.length() else 0L)
+            if (available < size) {
+                input.close()
+                throw PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, size - available)
             }
 
             val tmp = File(modelsDir, "$name.tmp")
@@ -86,7 +92,7 @@ class AssetModelStore(private val context: Context) : ModelStore {
                 target
             } catch (e: IOException) {
                 val available = runCatching { freeBytes() }.getOrNull()
-                if (size != null && available != null && available < size) {
+                if (available != null && available < size) {
                     throw PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, size - available, e)
                 }
                 throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED, cause = e)

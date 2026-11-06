@@ -27,4 +27,5 @@ class PipelineFailure(
     val error: PipelineError,
     val requiredBytes: Long? = null,
     cause: Throwable? = null,
-) : Exception(error.name, cause)
+    detail: String? = null, // for logs only, never shown in UI
+) : Exception(if (detail == null) error.name else "${error.name}: $detail", cause)

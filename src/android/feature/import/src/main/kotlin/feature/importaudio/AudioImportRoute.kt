@@ -28,6 +28,7 @@ fun AudioImportRoute(
     pipeline: TranscriptionPipeline,
     onJobStarted: (String) -> Unit,
     modifier: Modifier = Modifier,
+    onStartAudio: ((String) -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -46,6 +47,7 @@ fun AudioImportRoute(
     }
     val controller = rememberSaveable(pipeline, saver = saver) { AudioImportController(pipeline) }
     var readingSelection by remember { mutableStateOf(false) }
+    var starting by remember { mutableStateOf(false) }
     val picker = rememberLauncherForActivityResult(LocalAudioDocument()) { uri ->
         if (uri != null) {
             readingSelection = true
@@ -71,10 +73,26 @@ fun AudioImportRoute(
     ImportScreen(
         selectedAudioName = controller.audioName,
         onChooseAudio = { picker.launch(arrayOf("audio/*")) },
-        onStart = { controller.start()?.let(onJobStarted) },
+        onStart = {
+            val uri = controller.audioUri
+            if (uri != null && !starting) {
+                if (onStartAudio != null) {
+                    onStartAudio(uri) // F3 owns the job in its ViewModel, not this screen's scope.
+                } else {
+                    starting = true
+                    scope.launch {
+                        try {
+                            withContext(Dispatchers.IO) { controller.start() }?.let(onJobStarted)
+                        } finally {
+                            starting = false
+                        }
+                    }
+                }
+            }
+        },
         modifier = modifier,
         errorMessage = controller.errorMessage,
-        busy = readingSelection || controller.jobId != null,
+        busy = readingSelection || starting || controller.jobId != null,
     )
 }
 

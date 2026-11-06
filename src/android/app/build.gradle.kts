@@ -56,6 +56,8 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.runtime)
     debugImplementation(libs.compose.runtime.saveable)
+    debugImplementation(libs.androidx.lifecycle.viewmodel.ktx)
+    debugImplementation(libs.androidx.lifecycle.viewmodel.compose)
 
     testImplementation(libs.junit)
 }

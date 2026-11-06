@@ -1,5 +1,5 @@
 {
-  "version": "2.0",
+  "version": "2.1",
   "updated_at": "2026-11-07",
   "models": [
     {
@@ -21,40 +21,38 @@
       "memory_ram_mb": 160
     },
     {
-      "name": "silero-vad",
-      "target_file": "silero_vad.onnx",
-      "relative_path": "models/silero_vad.onnx",
-      "role": "Diarization / VAD",
-      "description": "Silero Voice Activity Detector for offline speech segmentation",
+      "name": "sherpa-onnx-pyannote-segmentation-3-0",
+      "target_file": "sherpa-onnx-pyannote-segmentation-3-0.onnx",
+      "relative_path": "models/sherpa-onnx-pyannote-segmentation-3-0.onnx",
+      "role": "Diarization / Segmentation",
+      "description": "Pyannote Segmentation 3.0 converted for sherpa-onnx offline speaker diarization",
       "runtime": "sherpa-onnx (ONNX Runtime)",
       "runtime_version": "v1.10.30",
-      "runtime_commit": "803a6bc5594e9f73f553d1ff374bc73a985d898a",
-      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/silero_vad.onnx",
+      "source_url": "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx",
       "license": "MIT",
       "format": "ONNX",
       "quantization": "FP32",
       "input_format": "PCM mono 16000 Hz, float32 [-1.0, 1.0]",
-      "size_bytes": 1827490,
-      "sha256": "7a3563969bcbe63cd3187b8f04746f34316279f6e6aa45550dfb0b92d6e4b854",
-      "memory_ram_mb": 15
+      "size_bytes": 6059288,
+      "sha256": "893c52e411b439c2c8f85f3ce010a300da58908ec8e0f6c278fb7785beab4aa7",
+      "memory_ram_mb": 35
     },
     {
-      "name": "campplus-speaker-embedding",
-      "target_file": "3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx",
-      "relative_path": "models/3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx",
+      "name": "3dspeaker-eres2net-base",
+      "target_file": "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+      "relative_path": "models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
       "role": "Diarization / Embedding",
-      "description": "3D-Speaker Cam++ speaker embedding extractor trained on VoxCeleb + Russian speech",
+      "description": "3D-Speaker ERes2Net base speaker embedding extractor for offline diarization",
       "runtime": "sherpa-onnx (ONNX Runtime)",
       "runtime_version": "v1.10.30",
-      "runtime_commit": "803a6bc5594e9f73f553d1ff374bc73a985d898a",
-      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx",
+      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
       "license": "Apache-2.0",
       "format": "ONNX",
       "quantization": "FP32",
       "input_format": "PCM mono 16000 Hz, float32 [-1.0, 1.0]",
-      "size_bytes": 28941235,
-      "sha256": "3cb40ff8d1796d11f6c4d7ecfef0f74577881c1626f2f01fbf9f42d2a45a31a9",
-      "memory_ram_mb": 40
+      "size_bytes": 26861502,
+      "sha256": "4b68079a4058f967ad7f5e8e3c54d398f51a44e5914fa6463994326588db2b90",
+      "memory_ram_mb": 45
     }
   ]
 }

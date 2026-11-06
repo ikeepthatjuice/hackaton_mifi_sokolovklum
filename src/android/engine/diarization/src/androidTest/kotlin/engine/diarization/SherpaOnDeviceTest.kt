@@ -21,15 +21,15 @@ class SherpaOnDeviceTest {
         val appContext = InstrumentationRegistry.getInstrumentation().targetContext
         val testContext = InstrumentationRegistry.getInstrumentation().context
 
-        val vadName = "silero_vad.onnx"
-        val vadFile = resolveOrExtractModel(testContext, appContext, vadName)
-        if (!vadFile.exists() || vadFile.length() == 0L) {
-            val errorMsg = "MODEL_MISSING $vadName"
+        val segName = "sherpa-onnx-pyannote-segmentation-3-0.onnx"
+        val segFile = resolveOrExtractModel(testContext, appContext, segName)
+        if (!segFile.exists() || segFile.length() == 0L) {
+            val errorMsg = "MODEL_MISSING $segName"
             Log.e(tag, errorMsg)
             throw AssertionError(errorMsg)
         }
 
-        val embName = "3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx"
+        val embName = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
         val embFile = resolveOrExtractModel(testContext, appContext, embName)
         if (!embFile.exists() || embFile.length() == 0L) {
             val errorMsg = "MODEL_MISSING $embName"
@@ -48,7 +48,7 @@ class SherpaOnDeviceTest {
         )
 
         val config = SherpaOnnxDiarizationConfig(
-            vadModelPath = vadFile.absolutePath,
+            segmentationModelPath = segFile.absolutePath,
             embeddingModelPath = embFile.absolutePath,
             clusteringThreshold = 0.6f,
             minSpeechDurationMs = 250L,
@@ -63,10 +63,8 @@ class SherpaOnDeviceTest {
 
         val distinctSpeakers = turns.map { it.speakerId }.distinct()
 
-        // Log measurement: diar turns=N speakers=K time_ms=T
         Log.i(tag, "diar turns=${turns.size} speakers=${distinctSpeakers.size} time_ms=$elapsedMs")
 
-        // Validations
         assertTrue("Expected at least 1 SpeakerTurn, got ${turns.size}", turns.isNotEmpty())
 
         val speakerRegex = Regex("^speaker_\\d+$")
@@ -77,7 +75,6 @@ class SherpaOnDeviceTest {
             assertTrue("endMs (${turn.endMs}) must be <= durationMs ($durationMs)", turn.endMs <= durationMs + 1000L)
         }
 
-        // JFK speech is a single speaker monologue
         assertEquals("Single speaker audio should result in exactly 1 speaker ID", 1, distinctSpeakers.size)
         assertEquals("First speaker must be speaker_1", "speaker_1", distinctSpeakers.first())
     }
@@ -145,4 +142,3 @@ class SherpaOnDeviceTest {
         return pcmOutputFile
     }
 }
-

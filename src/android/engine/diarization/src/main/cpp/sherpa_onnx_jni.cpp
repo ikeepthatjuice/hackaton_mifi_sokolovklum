@@ -19,33 +19,36 @@ JNIEXPORT jlong JNICALL
 Java_engine_diarization_SherpaOnnxNative_initDiarization(
         JNIEnv *env,
         jobject thiz,
-        jstring vad_model_path,
+        jstring segmentation_model_path,
         jstring embedding_model_path,
         jfloat clustering_threshold,
         jlong min_speech_duration_ms,
         jlong min_silence_duration_ms) {
 
-    const char *vad_chars = env->GetStringUTFChars(vad_model_path, nullptr);
+    const char *seg_chars = env->GetStringUTFChars(segmentation_model_path, nullptr);
     const char *emb_chars = env->GetStringUTFChars(embedding_model_path, nullptr);
 
     SherpaOnnxOfflineSpeakerDiarizationConfig config;
     memset(&config, 0, sizeof(config));
 
-    config.segmentation.silero_vad.model = vad_chars;
-    config.segmentation.silero_vad.min_speech_duration = (float)min_speech_duration_ms / 1000.0f;
-    config.segmentation.silero_vad.min_silence_duration = (float)min_silence_duration_ms / 1000.0f;
-    config.segmentation.silero_vad.threshold = 0.5f;
+    // Pyannote segmentation model (from speaker-segmentation-models release)
+    config.segmentation.pyannote.model = seg_chars;
+    config.segmentation.pyannote.threshold = 0.5f;
+    config.segmentation.pyannote.min_duration_on = (float)min_speech_duration_ms / 1000.0f;
+    config.segmentation.pyannote.min_duration_off = (float)min_silence_duration_ms / 1000.0f;
 
+    // Embedding model (from speaker-recongition-models release: 3D-Speaker ERes2Net or Cam++)
     config.embedding.model = emb_chars;
     config.embedding.num_threads = 2;
     config.embedding.provider = "cpu";
 
+    // Fast clustering
     config.clustering.threshold = clustering_threshold;
     config.clustering.num_clusters = -1;
 
     const SherpaOnnxOfflineSpeakerDiarization *sd = SherpaOnnxCreateOfflineSpeakerDiarization(&config);
 
-    env->ReleaseStringUTFChars(vad_model_path, vad_chars);
+    env->ReleaseStringUTFChars(segmentation_model_path, seg_chars);
     env->ReleaseStringUTFChars(embedding_model_path, emb_chars);
 
     if (sd == nullptr) {
@@ -136,4 +139,3 @@ Java_engine_diarization_SherpaOnnxNative_diarizePcm(
 }
 
 } // extern "C"
-

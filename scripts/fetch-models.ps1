@@ -17,14 +17,14 @@ $models = @(
         Sha256 = "60ed5bc3dd14eea856493d334349b405782ddcaf00eec29073ba81a4d4ea8aec"
     },
     @{
-        Name = "silero_vad.onnx"
-        Url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/silero_vad.onnx"
-        Sha256 = "7a3563969bcbe63cd3187b8f04746f34316279f6e6aa45550dfb0b92d6e4b854"
+        Name = "sherpa-onnx-pyannote-segmentation-3-0.onnx"
+        Url = "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx"
+        Sha256 = "893c52e411b439c2c8f85f3ce010a300da58908ec8e0f6c278fb7785beab4aa7"
     },
     @{
-        Name = "3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx"
-        Url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx"
-        Sha256 = "3cb40ff8d1796d11f6c4d7ecfef0f74577881c1626f2f01fbf9f42d2a45a31a9"
+        Name = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+        Url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+        Sha256 = "4b68079a4058f967ad7f5e8e3c54d398f51a44e5914fa6463994326588db2b90"
     }
 )
 
@@ -55,4 +55,3 @@ foreach ($item in $models) {
 }
 
 Write-Host "=== All models downloaded and verified ===" -ForegroundColor Cyan
-

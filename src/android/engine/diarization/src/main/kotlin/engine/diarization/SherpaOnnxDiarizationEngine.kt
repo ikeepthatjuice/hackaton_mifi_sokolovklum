@@ -12,10 +12,13 @@ import java.nio.ByteOrder
 
 /**
  * Configuration for Sherpa-onnx Diarization engine.
+ *
+ * @param segmentationModelPath Path to pyannote segmentation model (from speaker-segmentation-models release)
+ * @param embeddingModelPath Path to speaker embedding model (from speaker-recongition-models release: 3D-Speaker ERes2Net or Cam++)
  */
 data class SherpaOnnxDiarizationConfig(
-    val vadModelPath: String = "models/silero_vad.onnx",
-    val embeddingModelPath: String = "models/3dspeaker_speech_campplus_sv_ru_voxceleb_16k.onnx",
+    val segmentationModelPath: String = "models/sherpa-onnx-pyannote-segmentation-3-0.onnx",
+    val embeddingModelPath: String = "models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
     val baseDir: File? = null,
     val clusteringThreshold: Float = 0.6f,
     val minSpeechDurationMs: Long = 250L,
@@ -52,18 +55,18 @@ class SherpaOnnxDiarizationEngine(
                 throw IllegalStateException("MODEL_LOAD_FAILED: Native sherpa-onnx library is not loaded: ${SherpaOnnxNative.getLoadError()?.message}")
             }
 
-            val vadFile = resolveFile(config.vadModelPath)
+            val segFile = resolveFile(config.segmentationModelPath)
             val embFile = resolveFile(config.embeddingModelPath)
 
-            if (!vadFile.exists()) {
-                throw IllegalStateException("MODEL_LOAD_FAILED: VAD model file not found: ${vadFile.absolutePath}")
+            if (!segFile.exists()) {
+                throw IllegalStateException("MODEL_LOAD_FAILED: Pyannote segmentation model not found: ${segFile.absolutePath}")
             }
             if (!embFile.exists()) {
                 throw IllegalStateException("MODEL_LOAD_FAILED: Embedding model file not found: ${embFile.absolutePath}")
             }
 
             contextHandle = SherpaOnnxNative.initDiarization(
-                vadModelPath = vadFile.absolutePath,
+                vadModelPath = segFile.absolutePath,
                 embeddingModelPath = embFile.absolutePath,
                 clusteringThreshold = config.clusteringThreshold,
                 minSpeechDurationMs = config.minSpeechDurationMs,
@@ -212,4 +215,3 @@ class SherpaOnnxDiarizationEngine(
         return merged
     }
 }
-

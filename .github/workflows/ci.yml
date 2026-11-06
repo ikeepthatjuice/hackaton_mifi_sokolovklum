@@ -29,6 +29,16 @@ jobs:
       # Проверяет gradle-wrapper.jar по официальным хешам и кэширует зависимости.
       - uses: gradle/actions/setup-gradle@v4
 
+      # Key follows the script: version or SHA change -> new download.
+      - name: Cache native deps
+        uses: actions/cache@v4
+        with:
+          path: external/sherpa-onnx-android/
+          key: native-${{ hashFiles('scripts/fetch-native.sh') }}
+
+      - name: Fetch native deps
+        run: bash scripts/fetch-native.sh
+
       # Android-проект лежит в src/android по шаблону организаторов.
       - name: Build, unit tests, lint
         working-directory: src/android

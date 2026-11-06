@@ -52,9 +52,15 @@ fun AudioImportRoute(
             scope.launch {
                 try {
                     val name = withContext(Dispatchers.IO) {
-                        context.contentResolver.takePersistableUriPermission(
-                            uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
-                        )
+                        try {
+                            context.contentResolver.takePersistableUriPermission(
+                                uri, Intent.FLAG_GRANT_READ_URI_PERMISSION,
+                            )
+                        } catch (_: SecurityException) {
+                            // Some SAF providers only grant temporary access; immediate import can still read it.
+                        }
+                        context.contentResolver.openInputStream(uri)?.use { }
+                            ?: throw java.io.IOException("Audio URI cannot be opened")
                         displayName(context, uri)
                     }
                     controller.acceptSelection(uri.toString(), name)

@@ -1,5 +1,5 @@
 {
-  "version": "2.1",
+  "version": "2.2",
   "updated_at": "2026-11-07",
   "models": [
     {
@@ -10,7 +10,7 @@
       "description": "Whisper Base Multilingual for offline ASR with token-level timestamps",
       "runtime": "whisper.cpp (GGML)",
       "runtime_version": "v1.7.1",
-      "runtime_commit": "18503b8782bbbb5e8e3d06969562768565b9bf90",
+      "runtime_commit": "ebca09a3d1033417b0c630bbbe607b0f185b1488",
       "source_url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin",
       "license": "MIT",
       "format": "GGML",

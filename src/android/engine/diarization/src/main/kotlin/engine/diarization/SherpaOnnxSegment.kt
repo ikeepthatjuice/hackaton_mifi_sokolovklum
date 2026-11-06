@@ -12,4 +12,3 @@ data class SherpaOnnxSegment(
     val startMs: Long,
     val endMs: Long
 )
-

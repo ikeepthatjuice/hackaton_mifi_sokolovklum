@@ -16,20 +16,10 @@ android {
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
         }
-
-        externalNativeBuild {
-            cmake {
-                cppFlags("-std=c++17 -O3 -fvisibility=hidden")
-                arguments("-DANDROID_STL=c++_shared")
-            }
-        }
     }
 
-    externalNativeBuild {
-        cmake {
-            path("src/main/cpp/CMakeLists.txt")
-            version = "3.22.1"
-        }
+    sourceSets.getByName("main") {
+        jniLibs.srcDir("$rootDir/../../external/sherpa-onnx-android/jniLibs")
     }
 
     val localModels = file("$rootDir/../../local_models")
@@ -61,7 +51,6 @@ dependencies {
     implementation(project(":core:contracts"))
     implementation(libs.kotlinx.coroutines.core)
     implementation(libs.kotlinx.coroutines.android)
-    implementation(libs.onnxruntime.android)
 
     testImplementation(libs.junit)
     testImplementation(libs.kotlinx.coroutines.test)
@@ -69,4 +58,3 @@ dependencies {
     androidTestImplementation(libs.junit)
     androidTestImplementation(libs.kotlinx.coroutines.test)
 }
-

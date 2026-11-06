@@ -46,6 +46,14 @@ bash scripts/check-forbidden.sh
 
 Остановись, если в staged-файлах есть реальные записи, эталоны, ключи или выводы кейса.
 
+## Проверка на эмуляторе
+
+- `.github/workflows/emulator.yml` — на каждый PR в `main` и вручную (Actions → Emulator → Run workflow). Эмулятор API 34 x86_64 (google_apis), сценарий `scripts/emulator-smoke.sh`: установить APK, запустить `MainActivity`, проверить что процесс жив, затем `connectedDebugAndroidTest`.
+- Артефакты в Actions run: `app-debug-<sha>` (APK из CI, 3 дня) и `emulator-report-<sha>` (logcat и отчёты androidTest).
+- Веса в эмулятор кладутся только для тестов: `/sdcard/Android/data/com.neurostenographer.app/files/models`. Финальная доставка — assets внутри APK.
+- Данные кейса в эмулятор и CI не кладём. Для тестов — только `jfk.wav` из submodule whisper.cpp или сгенерированная синтетика.
+- Скорость на эмуляторе (x86_64, swiftshader) — не Android RTF; для метрик нужен реальный телефон.
+
 ## Контракт данных (кратко)
 
 Время — `Long`, мс от начала оригинала, интервалы `[startMs, endMs)`. PCM — mono 16 kHz float32 LE. `speaker_1`, `speaker_2`… по первому появлению, стабильны по всей записи. JSON экспорта собирается кодом, не LLM.

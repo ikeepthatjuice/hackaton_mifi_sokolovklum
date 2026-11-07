@@ -10,6 +10,7 @@ android {
     ndkVersion = "26.1.10909125"
     defaultConfig {
         minSdk = 26
+        ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         consumerProguardFiles("consumer-rules.pro")
         externalNativeBuild {
             cmake { arguments += "-DLLAMA_CPP_DIR=${project.layout.projectDirectory.dir("external/llama.cpp").asFile}" }

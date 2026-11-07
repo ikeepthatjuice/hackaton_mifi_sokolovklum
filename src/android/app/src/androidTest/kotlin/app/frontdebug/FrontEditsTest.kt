@@ -4,6 +4,9 @@ import androidx.compose.ui.semantics.SemanticsActions
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.hasScrollAction
 import androidx.compose.ui.test.hasSetTextAction
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.hasAnyAncestor
+import androidx.compose.ui.test.isDialog
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
 import androidx.compose.ui.test.onNodeWithTag
@@ -72,7 +75,7 @@ class FrontEditsTest {
         ActivityScenario.launch(FrontEditsPreviewActivity::class.java).use { scenario ->
             actions("e0")
             compose.onNodeWithText("Сменить спикера").performClick()
-            compose.onNodeWithText("speaker_2").performClick()
+            compose.onNode(hasText("speaker_2") and hasAnyAncestor(isDialog())).performClick()
             scenario.onActivity { assertEquals("speaker_2", it.editor.state.value.result.utterances.first().speakerId) }
         }
     }

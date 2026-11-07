@@ -90,6 +90,7 @@ class TranscriptAlignerImpl(
     ): String {
         if (turns.isEmpty()) return fallbackSpeaker
 
+        // 1. Direct temporal overlap: choose turn with maximum intersection
         var bestTurn: SpeakerTurn? = null
         var maxOverlap = 0L
 
@@ -108,6 +109,8 @@ class TranscriptAlignerImpl(
             return bestTurn.speakerId
         }
 
+        // 2. Outside all turn intervals: associate with the temporally closest turn.
+        // Words before the first turn, after the last turn, or inside pauses are never dropped.
         var minDistance = Long.MAX_VALUE
         var nearestTurn: SpeakerTurn? = null
 
@@ -126,11 +129,7 @@ class TranscriptAlignerImpl(
             }
         }
 
-        return if (nearestTurn != null && minDistance <= turnProximityToleranceMs) {
-            nearestTurn.speakerId
-        } else {
-            fallbackSpeaker
-        }
+        return nearestTurn?.speakerId ?: fallbackSpeaker
     }
 
     private fun deduplicateSeamWords(words: List<AsrWord>): List<AsrWord> {
@@ -143,8 +142,15 @@ class TranscriptAlignerImpl(
             val prev = result.last()
             val curr = words[i]
 
+            // Two words are seam duplicates ONLY if they have identical text AND actually overlap in time.
+            // Sequential words (even with identical text like "да, да") must NEVER be dropped.
+            val overlapStart = max(curr.startMs, prev.startMs)
+            val overlapEnd = min(curr.endMs, prev.endMs)
+            val overlap = max(0L, overlapEnd - overlapStart)
+            val prevDuration = max(1L, prev.endMs - prev.startMs)
+
             val isDuplicate = curr.text.equals(prev.text, ignoreCase = true) &&
-                    (curr.startMs < prev.endMs + 100L && curr.startMs >= prev.startMs)
+                    (overlap >= prevDuration / 2 || (curr.startMs == prev.startMs && curr.endMs == prev.endMs))
 
             if (!isDuplicate) {
                 result.add(curr)

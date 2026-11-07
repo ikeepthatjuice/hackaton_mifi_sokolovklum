@@ -135,5 +135,83 @@ class TranscriptAlignerTest {
         assertEquals("speaker_1", utterances[0].speakerId)
         assertEquals("Привет", utterances[0].rawText)
     }
+
+    @Test
+    fun `test word before first turn is assigned to first turn speaker and not dropped`() {
+        val words = listOf(
+            AsrWord("Привет,", startMs = 200, endMs = 600),
+            AsrWord("мир!", startMs = 2000, endMs = 2500)
+        )
+        val turns = listOf(
+            SpeakerTurn("speaker_1", startMs = 1900, endMs = 3000)
+        )
+
+        val utterances = aligner.align(words, turns)
+
+        val allWords = utterances.flatMap { it.rawText.split(" ") }
+        assertTrue("Word before first turn must be kept", allWords.contains("Привет,"))
+        assertTrue("Word in turn must be kept", allWords.contains("мир!"))
+        assertEquals("speaker_1", utterances[0].speakerId)
+    }
+
+    @Test
+    fun `test word after last turn is assigned to last turn speaker and not dropped`() {
+        val words = listOf(
+            AsrWord("Начало", startMs = 1000, endMs = 1500),
+            AsrWord("конец", startMs = 5000, endMs = 5500)
+        )
+        val turns = listOf(
+            SpeakerTurn("speaker_2", startMs = 900, endMs = 2000)
+        )
+
+        val utterances = aligner.align(words, turns)
+
+        val allWords = utterances.flatMap { it.rawText.split(" ") }
+        assertTrue("Word after last turn must be kept", allWords.contains("конец"))
+        assertEquals("speaker_2", utterances.last().speakerId)
+    }
+
+    @Test
+    fun `test word in pause between turns is assigned to nearest turn speaker and not dropped`() {
+        val words = listOf(
+            AsrWord("Слово1", startMs = 1000, endMs = 1400),
+            AsrWord("В_паузе_к_первому", startMs = 2200, endMs = 2600), // dist to turn 1 = 200ms, to turn 2 = 3400ms
+            AsrWord("В_паузе_ко_второму", startMs = 5300, endMs = 5700), // dist to turn 1 = 3300ms, to turn 2 = 300ms
+            AsrWord("Слово2", startMs = 6100, endMs = 6500)
+        )
+        val turns = listOf(
+            SpeakerTurn("speaker_1", startMs = 900, endMs = 2000),
+            SpeakerTurn("speaker_2", startMs = 6000, endMs = 7000)
+        )
+
+        val utterances = aligner.align(words, turns)
+
+        val allWords = utterances.flatMap { it.rawText.split(" ") }
+        assertEquals(4, allWords.size)
+        assertTrue(allWords.contains("В_паузе_к_первому"))
+        assertTrue(allWords.contains("В_паузе_ко_второму"))
+
+        val utt1 = utterances.first { it.rawText.contains("В_паузе_к_первому") }
+        assertEquals("speaker_1", utt1.speakerId)
+
+        val utt2 = utterances.first { it.rawText.contains("В_паузе_ко_второму") }
+        assertEquals("speaker_2", utt2.speakerId)
+    }
+
+    @Test
+    fun `test natural spoken repetition of same word is not dropped`() {
+        val words = listOf(
+            AsrWord("да,", startMs = 1000, endMs = 1200),
+            AsrWord("да,", startMs = 1250, endMs = 1450)
+        )
+        val turns = listOf(
+            SpeakerTurn("speaker_1", startMs = 900, endMs = 2000)
+        )
+
+        val utterances = aligner.align(words, turns)
+
+        assertEquals(1, utterances.size)
+        assertEquals("да, да,", utterances[0].rawText)
+    }
 }
 

@@ -8,6 +8,12 @@ import android.os.ParcelFileDescriptor
 import android.os.SystemClock
 import android.provider.MediaStore
 import android.view.accessibility.AccessibilityNodeInfo
+import androidx.compose.ui.test.ComposeTimeoutException
+import androidx.compose.ui.test.hasText
+import androidx.compose.ui.test.isEnabled
+import androidx.compose.ui.test.junit4.createEmptyComposeRule
+import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.performClick
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
@@ -15,6 +21,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import com.neurostenographer.app.MainActivity
 import org.json.JSONObject
 import org.junit.Assert.*
+import org.junit.Rule
 import org.junit.Test
 import org.junit.runner.RunWith
 import java.io.File
@@ -25,6 +32,8 @@ import java.nio.ByteOrder
 @RunWith(AndroidJUnit4::class)
 @SdkSuppress(minSdkVersion = 29)
 class FrontFlowTest {
+    @get:Rule val compose = createEmptyComposeRule()
+    private val uiTimeoutMs = 30_000L
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
     private val automation get() = instrumentation.uiAutomation
 
@@ -41,53 +50,53 @@ class FrontFlowTest {
         try {
             requireNotNull(resolver.openOutputStream(source)).use { it.write(silentWav()) }
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
-                waitText("Выбрать аудио")
+                waitAppText("Выбрать аудио")
                 capture("front-import")
-                clickText("Выбрать аудио")
+                clickAppText("Выбрать аудио")
                 // Cancel the first picker: the screen must remain usable.
-                waitFor { find { it.packageName?.toString()?.contains("documentsui") == true } }
+                waitFor("SAF audio picker") { find { it.packageName?.toString()?.contains("documentsui") == true } }
                 shell("input keyevent KEYCODE_BACK")
-                clickText("Выбрать аудио")
+                clickAppText("Выбрать аудио")
                 chooseDownloads()
                 clickText(name)
-                waitText(name)
-                clickText("Начать обработку")
-                clickText("Отменить")
-                waitFor { find { it.text?.toString() in setOf("Выбрать аудио", "Выбрать другой файл") } }
-                click(waitFor { find { it.text?.toString() in setOf("Выбрать аудио", "Выбрать другой файл") } })
+                waitAppText(name)
+                clickAppText("Начать обработку")
+                clickAppText("Отменить")
+                clickAudioChooser()
                 chooseDownloads()
                 clickText(name)
-                clickText("Начать обработку")
-                waitText("Обработка аудио")
-                waitFor {
-                    if (FrontDebugStarts.snapshot().size >= initialStarts.size + 2) automation.rootInActiveWindow else null
+                clickAppText("Начать обработку")
+                // Wait for the actual start, not a short-lived progress label that may be
+                // gone by the time slow accessibility polling observes the next frame.
+                awaitCondition("second pipeline start") {
+                    FrontDebugStarts.snapshot().size >= initialStarts.size + 2
                 }
                 val activeStarts = FrontDebugStarts.snapshot()
                 assertEquals(initialStarts.size + 2, activeStarts.size)
                 rotate(scenario, ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE, Configuration.ORIENTATION_LANDSCAPE)
                 scenario.recreate()
-                waitText("Расшифровка", 30_000)
+                waitAppText("Расшифровка")
                 assertEquals(activeStarts, FrontDebugStarts.snapshot())
                 rotate(scenario, ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, Configuration.ORIENTATION_PORTRAIT)
-                waitText("Реплик: 2")
+                waitAppText("Реплик: 2")
                 capture("front-result")
                 // Rotation/recreation must retain the same result and never invoke start again.
                 scenario.recreate()
-                waitText("Расшифровка")
+                waitAppText("Расшифровка")
                 assertEquals(activeStarts, FrontDebugStarts.snapshot())
-                clickText("Сохранить JSON")
+                clickAppText("Сохранить JSON")
                 chooseDownloads()
-                val edit = waitFor {
+                val edit = waitFor("SAF export filename") {
                     find { it.className?.toString() == "android.widget.EditText" && it.text?.startsWith("transcript-") == true }
                 }
                 exportName = edit.text.toString().let { if (it.endsWith(".json")) it else "$it.json" }
                 require(exportName!!.matches(Regex("transcript-[0-9-]+\\.json")))
-                val save = waitFor {
+                val save = waitFor("enabled SAF Save button") {
                     find { it.isEnabled && (it.viewIdResourceName == "android:id/button1" ||
                         it.text?.toString()?.lowercase() in setOf("save", "сохранить")) }
                 }
                 click(save)
-                waitText("JSON сохранён", 15_000)
+                waitAppText("JSON сохранён")
                 capture("front-json-saved")
                 val json = JSONObject(shell("cat /sdcard/Download/${exportName!!}"))
                 assertEquals(setOf("transcript"), json.keys().asSequence().toSet())
@@ -99,12 +108,12 @@ class FrontFlowTest {
                     assertTrue(item.getLong("end_ms") >= item.getLong("start_ms"))
                     assertTrue(item.getString("text").isNotBlank())
                 }
-                clickText("Выбрать другое аудио")
-                click(waitFor { find { it.text?.toString() in setOf("Выбрать аудио", "Выбрать другой файл") } })
+                clickAppText("Выбрать другое аудио")
+                clickAudioChooser()
                 chooseDownloads()
                 clickText(name)
-                clickText("Начать обработку")
-                waitText("Расшифровка", 30_000)
+                clickAppText("Начать обработку")
+                waitAppText("Расшифровка")
                 assertEquals(initialStarts.size + 3, FrontDebugStarts.snapshot().size)
             }
         } finally {
@@ -117,40 +126,58 @@ class FrontFlowTest {
 
     private fun rotate(scenario: ActivityScenario<MainActivity>, requested: Int, expected: Int) {
         scenario.onActivity { it.requestedOrientation = requested }
-        val deadline = SystemClock.uptimeMillis() + 10_000
-        while (SystemClock.uptimeMillis() < deadline) {
+        awaitCondition("Activity orientation $expected") {
             var actual = Configuration.ORIENTATION_UNDEFINED
             scenario.onActivity { actual = it.resources.configuration.orientation }
-            if (actual == expected) return
-            SystemClock.sleep(100)
+            actual == expected
         }
-        throw AssertionError("Activity did not rotate")
+        compose.waitForIdle()
     }
 
     private fun chooseDownloads() {
-        // DocumentsUI remembers the last root; explicitly choose Downloads when the drawer is available.
-        val root = waitFor {
+        waitFor("DocumentsUI window") {
             find { it.packageName?.toString()?.contains("documentsui") == true }
         }
-        val navigation = find {
-            it.contentDescription?.toString()?.lowercase() in setOf("show roots", "показать корневые папки", "open navigation drawer")
+        val navigationNames = setOf("show roots", "показать корневые папки", "open navigation drawer")
+        fun downloads() = find {
+            it.viewIdResourceName == "android:id/title" &&
+                it.text?.toString()?.lowercase() in setOf("downloads", "загрузки", "скачанные файлы")
         }
-        if (navigation != null) {
-            click(navigation)
-            val downloads = waitFor {
-                find {
-                    it.viewIdResourceName == "android:id/title" &&
-                        it.text?.toString()?.lowercase() in setOf("downloads", "загрузки", "скачанные файлы")
-                }
-            }
-            click(downloads)
+        // DocumentsUI may expose its window before its toolbar. Wait until either the
+        // drawer control or the already-open Downloads root is ready; never assume it is loaded.
+        val navigationOrRoot = waitFor("SAF navigation or Downloads root") {
+            find { it.contentDescription?.toString()?.lowercase() in navigationNames } ?: downloads()
+        }
+        if (navigationOrRoot.contentDescription?.toString()?.lowercase() in navigationNames) {
+            click(navigationOrRoot)
+            click(waitFor("Downloads root in SAF drawer") { downloads() })
         } else {
-            assertNotNull(root)
+            click(navigationOrRoot)
         }
     }
 
+    private fun waitAppText(text: String) = awaitCondition("app text: $text") {
+        compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+    }
+
+    private fun clickAppText(text: String) {
+        val matcher = hasText(text) and isEnabled()
+        awaitCondition("enabled app control: $text") {
+            compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNode(matcher).performClick()
+    }
+
+    private fun clickAudioChooser() {
+        val matcher = (hasText("Выбрать аудио") or hasText("Выбрать другой файл")) and isEnabled()
+        awaitCondition("audio chooser after cancellation/reset") {
+            compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+        }
+        compose.onNode(matcher).performClick()
+    }
+
     private fun clickText(text: String) = click(waitText(text))
-    private fun waitText(text: String, timeout: Long = 10_000) = waitFor(timeout) { find { it.text?.toString() == text } }
+    private fun waitText(text: String) = waitFor("system text: $text") { find { it.text?.toString() == text } }
     private fun click(node: AccessibilityNodeInfo) {
         var target: AccessibilityNodeInfo? = node
         while (target != null && !target.isClickable) target = target.parent
@@ -165,14 +192,22 @@ class FrontFlowTest {
         }
         return visit(automation.rootInActiveWindow)
     }
-    private fun waitFor(timeout: Long = 10_000, block: () -> AccessibilityNodeInfo?): AccessibilityNodeInfo {
-        val deadline = SystemClock.uptimeMillis() + timeout
-        while (SystemClock.uptimeMillis() < deadline) {
-            block()?.let { return it }
-            SystemClock.sleep(100)
+    private fun awaitCondition(description: String, condition: () -> Boolean) {
+        try {
+            compose.waitUntil(timeoutMillis = uiTimeoutMs, condition = condition)
+        } catch (e: ComposeTimeoutException) {
+            runCatching { capture("front-test-timeout") }
+            throw AssertionError("Timed out waiting for $description after ${uiTimeoutMs}ms", e)
         }
-        capture("front-test-timeout")
-        throw AssertionError("Timed out waiting for expected synthetic test UI")
+    }
+
+    private fun waitFor(description: String, block: () -> AccessibilityNodeInfo?): AccessibilityNodeInfo {
+        var found: AccessibilityNodeInfo? = null
+        awaitCondition(description) {
+            found = block()
+            found != null
+        }
+        return checkNotNull(found)
     }
     private fun shell(command: String): String = ParcelFileDescriptor.AutoCloseInputStream(
         automation.executeShellCommand(command),
@@ -180,9 +215,9 @@ class FrontFlowTest {
 
     private fun capture(name: String) {
         // Accessibility may switch windows before SurfaceFlinger draws the returning Activity.
+        compose.waitForIdle()
         instrumentation.waitForIdleSync()
-        runCatching { automation.waitForIdle(200, 2_000) }
-        SystemClock.sleep(200)
+        runCatching { automation.waitForIdle(200, 10_000) }
         automation.takeScreenshot()?.let { bitmap ->
             File(instrumentation.targetContext.cacheDir, "$name.png").outputStream().use {
                 bitmap.compress(Bitmap.CompressFormat.PNG, 100, it)

@@ -45,6 +45,40 @@ class GigaAmAsrEngineTest {
     }
 
     @Test
+    fun `test isolated whitespace token does not glue words and marks word boundary`() {
+        val engine = GigaAmAsrEngine()
+
+        // 1. [ ▁ , слово ] -> sequence starting with isolated space token
+        val leadingSpaceTokens = listOf(
+            GigaAmToken(text = "\u2581", timestampMs = 100L),
+            GigaAmToken(text = "слово", timestampMs = 300L)
+        )
+        val leadingWords = engine.reconstructWords(
+            tokens = leadingSpaceTokens,
+            chunkStartOffsetMs = 0L,
+            chunkDurationMs = 1000L
+        )
+        assertEquals(1, leadingWords.size)
+        assertEquals("слово", leadingWords[0].text)
+
+        // 2. [ слово , ▁ , слово ] -> isolated space token between words must split them, not glue
+        val separatedTokens = listOf(
+            GigaAmToken(text = "слово", timestampMs = 100L),
+            GigaAmToken(text = "\u2581", timestampMs = 400L),
+            GigaAmToken(text = "слово", timestampMs = 600L)
+        )
+        val separatedWords = engine.reconstructWords(
+            tokens = separatedTokens,
+            chunkStartOffsetMs = 0L,
+            chunkDurationMs = 1000L
+        )
+        assertEquals(2, separatedWords.size)
+        assertEquals("слово", separatedWords[0].text)
+        assertEquals("слово", separatedWords[1].text)
+        assertTrue("Second word starts after first ends", separatedWords[1].startMs >= separatedWords[0].endMs)
+    }
+
+    @Test
     fun `test chunk offset is applied to word timestamps`() {
         val engine = GigaAmAsrEngine()
         val tokens = listOf(

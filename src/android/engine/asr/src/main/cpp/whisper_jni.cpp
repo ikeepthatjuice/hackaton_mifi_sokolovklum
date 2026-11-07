@@ -72,6 +72,7 @@ Java_engine_asr_WhisperNative_transcribePcm(
     params.translate = false;
     params.language = lang_chars;
     params.n_threads = threads > 0 ? threads : 4;
+    params.greedy.best_of = 1; // default 5: five decoders on every temperature fallback
     params.token_timestamps = (enable_token_timestamps == JNI_TRUE);
     params.split_on_word = true;
     params.thold_pt = 0.01f;

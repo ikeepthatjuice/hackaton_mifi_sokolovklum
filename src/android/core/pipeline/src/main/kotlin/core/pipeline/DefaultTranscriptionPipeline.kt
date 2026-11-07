@@ -22,7 +22,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -111,11 +114,20 @@ class DefaultTranscriptionPipeline(
             var warnings = emptyList<String>()
             val raw = { utterances.map { it.copy(displayText = it.rawText) } }
             val processed = try {
-                // Portions of POSTPROCESS_PORTION utterances: on timeout the finished ones are kept, the rest stay raw.
+                // Budget = max(30% of audio, one portion): the first portion always finishes; later portions
+                // run only while the budget lasts. Finished portions are kept, the rest stay raw.
                 val done = stage(engines.postprocessor, suppressCloseErrors = false) { processor ->
                     val done = ArrayList<Utterance>(utterances.size)
-                    withTimeoutOrNull(budgetMs) {
-                        for (portion in utterances.chunked(POSTPROCESS_PORTION)) done += engineCall { processor.process(portion) }
+                    val portions = utterances.chunked(POSTPROCESS_PORTION)
+                    coroutineScope {
+                        val budget = launch { delay(budgetMs) } // generation clock starts with the first portion
+                        portions.firstOrNull()?.let { done += engineCall { processor.process(it) } }
+                        val rest = launch { for (portion in portions.drop(1)) done += engineCall { processor.process(portion) } }
+                        select<Unit> {
+                            rest.onJoin {}
+                            budget.onJoin { rest.cancelAndJoin() }
+                        }
+                        budget.cancel()
                     }
                     done
                 }

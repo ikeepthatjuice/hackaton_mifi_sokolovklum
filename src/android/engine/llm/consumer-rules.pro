@@ -1,0 +1,1 @@
+-keep class engine.llm.NativeBridge { *; }

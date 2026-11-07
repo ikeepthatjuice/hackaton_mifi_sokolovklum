@@ -44,7 +44,7 @@ fun TranscriptScreen(
             item { Text(result.warnings.joinToString("\n")) }
         }
         // Separate lazy items keep each action reachable at large font sizes / in landscape.
-        item {
+        item(key = "transcript:export") {
             Button(
                 onClick = onSaveJson,
                 enabled = exportAvailable && !exportInProgress,
@@ -75,7 +75,7 @@ fun TranscriptScreen(
                 }
             }
         }
-        item { Text("Конец расшифровки", modifier = Modifier.padding(bottom = 24.dp)) }
+        item(key = "transcript:end") { Text("Конец расшифровки", modifier = Modifier.padding(bottom = 24.dp)) }
     }
 }
 

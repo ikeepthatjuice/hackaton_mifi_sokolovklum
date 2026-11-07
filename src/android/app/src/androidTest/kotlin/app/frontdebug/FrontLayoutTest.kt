@@ -6,12 +6,11 @@ import android.content.res.Configuration
 import androidx.compose.ui.test.assertIsDisplayed
 import androidx.compose.ui.test.assertIsNotEnabled
 import androidx.compose.ui.test.hasScrollAction
-import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
-import androidx.compose.ui.test.performScrollToNode
+import androidx.compose.ui.test.performScrollToKey
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
@@ -58,7 +57,7 @@ class FrontLayoutTest {
 
     @Test fun exportButtonIsDisabledWhileSaving() {
         launch("saving").use {
-            compose.onNode(hasScrollAction()).performScrollToNode(hasText("Сохранение…"))
+            compose.onNode(hasScrollAction()).performScrollToKey("transcript:export")
             compose.onNodeWithText("Сохранение…").assertIsDisplayed().assertIsNotEnabled()
             compose.onNodeWithText("Выбрать другое аудио").performScrollTo().assertIsDisplayed()
         }
@@ -66,10 +65,12 @@ class FrontLayoutTest {
 
     @Test fun longTranscriptScrollsToEndAndBackToExportAtLargeFont() {
         launch("transcript").use { scenario ->
-            compose.onNode(hasScrollAction()).performScrollToNode(hasText("Конец расшифровки"))
+            // Key-based scrolling runs through the lazy-list UI-thread action. Scanning 500 nodes
+            // with performScrollToNode can race layout on Compose 1.7.3 in x86 CI.
+            compose.onNode(hasScrollAction()).performScrollToKey("transcript:end")
             compose.onNodeWithText("Конец расшифровки").assertIsDisplayed()
             scenario.recreate()
-            compose.onNode(hasScrollAction()).performScrollToNode(hasText("Сохранить JSON"))
+            compose.onNode(hasScrollAction()).performScrollToKey("transcript:export")
             compose.onNodeWithText("Сохранить JSON").assertIsDisplayed().performClick()
             compose.onNodeWithText("Проверен callback кнопки (файл не записывался)").performScrollTo().assertIsDisplayed()
             compose.onNodeWithText("Выбрать другое аудио").performScrollTo().assertIsDisplayed()

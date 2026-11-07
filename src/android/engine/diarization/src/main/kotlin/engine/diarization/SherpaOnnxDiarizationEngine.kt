@@ -31,7 +31,7 @@ enum class SpeakerEmbeddingModel(
      * Lightweight and fast alternative for low-power mobile devices.
      */
     CAMPPLUS(
-        defaultRelativePath = "models/3dspeaker_speech_campplus_sv_zh-cn_16k.onnx",
+        defaultRelativePath = "models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
         description = "3D-Speaker CAM++"
     );
 }
@@ -62,7 +62,7 @@ data class SherpaOnnxDiarizationConfig(
 ) {
     companion object {
         const val MODEL_ERES2NET = "models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
-        const val MODEL_CAMPPLUS = "models/3dspeaker_speech_campplus_sv_zh-cn_16k.onnx"
+        const val MODEL_CAMPPLUS = "models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
 
         fun withERes2Net(threshold: Float = 0.75f, baseDir: File? = null) = SherpaOnnxDiarizationConfig(
             embeddingModelType = SpeakerEmbeddingModel.ERES2NET,

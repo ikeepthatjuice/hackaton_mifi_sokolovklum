@@ -48,13 +48,13 @@ class SherpaOnnxDiarizationEngineTest {
     fun `test returning first voice retains original ID across multi-speaker conversation`() {
         val engine = SherpaOnnxDiarizationEngine()
         val segments = listOf(
-            SherpaOnnxSegment(clusterId = 100, startMs = 1000, endMs = 3000),
-            SherpaOnnxSegment(clusterId = 200, startMs = 3500, endMs = 5000),
-            SherpaOnnxSegment(clusterId = 300, startMs = 5500, endMs = 7000),
-            SherpaOnnxSegment(clusterId = 100, startMs = 7500, endMs = 9000)
+            SherpaOnnxSegment(clusterId = 100, startMs = 1000, endMs = 3500),
+            SherpaOnnxSegment(clusterId = 200, startMs = 4000, endMs = 6500),
+            SherpaOnnxSegment(clusterId = 300, startMs = 7000, endMs = 9500),
+            SherpaOnnxSegment(clusterId = 100, startMs = 10000, endMs = 12500)
         )
 
-        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 10000)
+        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 15000)
 
         assertEquals(4, turns.size)
         assertEquals("speaker_1", turns[0].speakerId)
@@ -67,19 +67,62 @@ class SherpaOnnxDiarizationEngineTest {
     fun `test dynamic cluster count without pre-fixing number of participants`() {
         val engine = SherpaOnnxDiarizationEngine()
         val segments = listOf(
-            SherpaOnnxSegment(clusterId = 10, startMs = 100, endMs = 500),
-            SherpaOnnxSegment(clusterId = 20, startMs = 600, endMs = 1200),
-            SherpaOnnxSegment(clusterId = 30, startMs = 1500, endMs = 2000),
-            SherpaOnnxSegment(clusterId = 40, startMs = 2500, endMs = 3000)
+            SherpaOnnxSegment(clusterId = 10, startMs = 100, endMs = 2500),
+            SherpaOnnxSegment(clusterId = 20, startMs = 2600, endMs = 5000),
+            SherpaOnnxSegment(clusterId = 30, startMs = 5200, endMs = 7500),
+            SherpaOnnxSegment(clusterId = 40, startMs = 7600, endMs = 10000)
         )
 
-        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 4000)
+        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 12000)
 
         assertEquals(4, turns.size)
         assertEquals("speaker_1", turns[0].speakerId)
         assertEquals("speaker_2", turns[1].speakerId)
         assertEquals("speaker_3", turns[2].speakerId)
         assertEquals("speaker_4", turns[3].speakerId)
+    }
+
+    @Test
+    fun `test micro-speakers under 2 seconds are merged into nearest dominant speaker`() {
+        val engine = SherpaOnnxDiarizationEngine(
+            config = SherpaOnnxDiarizationConfig(minSpeakerTotalDurationMs = 2000L)
+        )
+        val segments = listOf(
+            // Speaker 1: total 4 seconds
+            SherpaOnnxSegment(clusterId = 1, startMs = 1000, endMs = 3000),
+            // Short noise / interjection: 400 ms (cluster 99, total < 2s)
+            SherpaOnnxSegment(clusterId = 99, startMs = 3200, endMs = 3600),
+            // Speaker 1 continues: 2 seconds
+            SherpaOnnxSegment(clusterId = 1, startMs = 3800, endMs = 5800),
+            // Speaker 2: total 3 seconds
+            SherpaOnnxSegment(clusterId = 2, startMs = 7000, endMs = 10000)
+        )
+
+        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 12000L)
+
+        // Cluster 99 (< 2s) should be merged into speaker_1 (nearest), leaving only 2 speakers!
+        val distinctSpeakers = turns.map { it.speakerId }.distinct()
+        assertEquals(2, distinctSpeakers.size)
+        assertEquals("speaker_1", distinctSpeakers[0])
+        assertEquals("speaker_2", distinctSpeakers[1])
+    }
+
+    @Test
+    fun `test when all clusters under 2s they are not collapsed into single speaker`() {
+        val engine = SherpaOnnxDiarizationEngine(
+            config = SherpaOnnxDiarizationConfig(minSpeakerTotalDurationMs = 2000L)
+        )
+        val segments = listOf(
+            SherpaOnnxSegment(clusterId = 10, startMs = 500, endMs = 1500),
+            SherpaOnnxSegment(clusterId = 20, startMs = 2000, endMs = 3200)
+        )
+
+        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 5000L)
+
+        val distinctSpeakers = turns.map { it.speakerId }.distinct()
+        assertEquals(2, distinctSpeakers.size)
+        assertEquals("speaker_1", distinctSpeakers[0])
+        assertEquals("speaker_2", distinctSpeakers[1])
     }
 
     @Test

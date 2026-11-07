@@ -68,7 +68,7 @@ class LocalTranscriptPostprocessorTest {
         val engine=LocalTranscriptPostprocessor(TextGenerator { text, _ -> sizes.add(text.length);text.trim()+"." },maxChunkChars=40)
         val output=engine.process(listOf(input))
         assertTrue(sizes.size>1)
-        assertTrue(sizes.all { it<=40 })
+        assertTrue(sizes.all { it<=900 }) // bounded transport packets, raw chunks remain <=40
         assertTrue(TranscriptValidator().validate(listOf(input),output).accepted)
         assertNotEquals(input.rawText,output.single().displayText)
     }

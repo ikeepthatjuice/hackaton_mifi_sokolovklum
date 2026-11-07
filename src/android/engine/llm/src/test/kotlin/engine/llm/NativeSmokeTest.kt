@@ -50,7 +50,56 @@ class NativeSmokeTest {
         } finally { runtime.close() }
     }
 
+    @Test fun eagerPreparationLoadsModelBeforeGeneration() = runBlocking {
+        val path = System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for eager preparation", !path.isNullOrBlank())
+        val dir = java.nio.file.Files.createTempDirectory("synthetic-llm-prepare")
+        val link = java.nio.file.Files.createSymbolicLink(dir.resolve("model.gguf"), File(path!!).toPath().toAbsolutePath())
+        val runtime = LlamaCppTextGenerator(link.toFile(), MODEL_SHA)
+        try {
+            withTimeout(120_000) { runtime.prepare() }
+            java.nio.file.Files.delete(link) // generate must use the already loaded handle
+            assertTrue(withTimeout(30_000) { runtime.generate("да", 256) }.isNotBlank())
+        } finally {
+            runtime.close()
+            java.nio.file.Files.deleteIfExists(link)
+            java.nio.file.Files.deleteIfExists(dir)
+        }
+    }
+
+    @Test fun cachedPrefixNeverCarriesPreviousTextOrScalarBatchMode() = runBlocking {
+        val path = System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for KV isolation", !path.isNullOrBlank())
+        val runtime = LlamaCppTextGenerator(File(path!!), MODEL_SHA)
+        val first = "мы не переносим встречу нужно 12 папок"
+        val other = "олег завтра позвонит марине"
+        try {
+            val expected = withTimeout(120_000) { runtime.generate(first, 256) }
+            withTimeout(120_000) { runtime.generate(other, 256) }
+            assertEquals(expected, withTimeout(120_000) { runtime.generate(first, 256) })
+            val packet = "[0] да\n[1] нет"
+            val before = withTimeout(120_000) { runtime.generate(packet, 256) }
+            withTimeout(120_000) { runtime.generate(first, 256) } // changes prompt mode
+            assertEquals(before, withTimeout(120_000) { runtime.generate(packet, 256) })
+            assertTrue(BatchFormat.decode(before, 2).rows.size == 2)
+        } finally { runtime.close() }
+    }
+
     companion object {
-        private const val MODEL_SHA="9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031"
+        // Q4 is the current default; do not silently verify a different model.
+        private const val MODEL_SHA="2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9"
+    }
+
+    @Test fun pipelineOwnershipClosesTheRealRuntime() = runBlocking {
+        val path=System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for native lifecycle",!path.isNullOrBlank())
+        val runtime=LlamaCppTextGenerator(File(path!!),MODEL_SHA)
+        val processor=LocalTranscriptPostprocessor(runtime)
+        try {
+            withTimeout(120_000) {processor.process(listOf(Utterance("synthetic_close","speaker_1",0,1000,"да","да")))}
+            processor.close();processor.close()
+            try {runtime.generate("нет",256);fail("closed runtime")}
+            catch(e:LlmException) {assertEquals(LlmFailure.CLOSED,e.code)}
+        } finally {processor.close()}
     }
 }

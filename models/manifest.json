@@ -53,6 +53,21 @@
       "size_bytes": 39593761,
       "sha256": "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
       "memory_ram_mb": 45
+    },
+    {
+      "name": "qwen3-0.6b-q4-k-m",
+      "target_file": "Qwen3-0.6B-Q4_K_M.gguf",
+      "relative_path": "models/Qwen3-0.6B-Q4_K_M.gguf",
+      "role": "LLM",
+      "description": "Russian-first verbatim punctuation and casing; each utterance validated, English supported",
+      "runtime": "llama.cpp",
+      "runtime_commit": "954de248ac6907dd05dc19f0f511ab18f2807a54",
+      "source_url": "https://huggingface.co/prithivMLmods/Qwen3-0.6B-GGUF/resolve/3fa3255253c99e212675c0825241518cdba8e42c/Qwen3_0.6B.Q4_K_M.gguf",
+      "license": "Apache-2.0",
+      "format": "GGUF",
+      "quantization": "Q4_K_M",
+      "size_bytes": 396704928,
+      "sha256": "2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9"
     }
   ]
 }

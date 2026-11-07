@@ -9,6 +9,34 @@
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)
 #define LOGE(...) __android_log_print(ANDROID_LOG_ERROR, TAG, __VA_ARGS__)
 
+// Whisper tokens are byte-level BPE pieces: a Cyrillic letter (2 bytes) can be split between two
+// tokens. NewStringUTF aborts the process on such bytes (CheckJNI: "not valid Modified UTF-8").
+// Returns the length of s up to its last complete UTF-8 sequence; the rest is carried to the next token.
+static size_t complete_utf8_prefix(const std::string &s) {
+    const size_t n = s.size();
+    for (size_t back = 1; back <= 4 && back <= n; ++back) {
+        const unsigned char c = static_cast<unsigned char>(s[n - back]);
+        if ((c & 0xC0) == 0x80) continue; // continuation byte
+        const size_t len = c < 0x80 ? 1 : (c >> 5) == 0x6 ? 2 : (c >> 4) == 0xE ? 3 : (c >> 3) == 0x1E ? 4 : 1;
+        return back >= len ? n : n - back;
+    }
+    return n; // no lead byte nearby: invalid bytes, the Java decoder replaces them
+}
+
+// Standard UTF-8 bytes -> java.lang.String (handles 4-byte sequences that Modified UTF-8 cannot).
+static jstring utf8_to_jstring(JNIEnv *env, const std::string &bytes) {
+    jbyteArray array = env->NewByteArray(static_cast<jsize>(bytes.size()));
+    env->SetByteArrayRegion(array, 0, static_cast<jsize>(bytes.size()), reinterpret_cast<const jbyte *>(bytes.data()));
+    jclass string_class = env->FindClass("java/lang/String");
+    jmethodID ctor = env->GetMethodID(string_class, "<init>", "([BLjava/lang/String;)V");
+    jstring charset = env->NewStringUTF("UTF-8");
+    auto result = static_cast<jstring>(env->NewObject(string_class, ctor, array, charset));
+    env->DeleteLocalRef(array);
+    env->DeleteLocalRef(charset);
+    env->DeleteLocalRef(string_class);
+    return result;
+}
+
 extern "C" {
 
 JNIEXPORT jlong JNICALL
@@ -104,6 +132,7 @@ Java_engine_asr_WhisperNative_transcribePcm(
     std::vector<jobject> token_objects;
     const int n_segments = whisper_full_n_segments(ctx);
     const whisper_token eot_id = whisper_token_eot(ctx);
+    std::string pending; // incomplete UTF-8 tail of previous tokens
 
     for (int i = 0; i < n_segments; ++i) {
         const int n_tokens = whisper_full_n_tokens(ctx, i);
@@ -137,7 +166,13 @@ Java_engine_asr_WhisperNative_transcribePcm(
                 t1 = seg_t1;
             }
 
-            jstring jtext = env->NewStringUTF(text);
+            pending += text;
+            const size_t complete = complete_utf8_prefix(pending);
+            if (complete == 0) continue; // only part of a character so far: it completes in a later token
+            const std::string piece = pending.substr(0, complete);
+            pending.erase(0, complete);
+
+            jstring jtext = utf8_to_jstring(env, piece);
             jobject jtoken = env->NewObject(token_class, token_init, jtext, (jlong)t0, (jlong)t1, (jfloat)token_data.p);
             token_objects.push_back(jtoken);
             env->DeleteLocalRef(jtext);

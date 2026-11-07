@@ -16,6 +16,20 @@ trap 'adb logcat -d > "$ROOT/emulator-logcat.txt"' EXIT
 
 # Cached AVD keeps the app and module test APKs from a previous run, signed with that runner's debug key.
 adb wait-for-device
+# ADB can be ready while System UI is still booting. Its ANR dialog can steal
+# focus from FrontFlowTest even when the app itself has started successfully.
+boot_deadline=$((SECONDS + 120))
+until [ "$(adb shell getprop sys.boot_completed | tr -d '\r')" = "1" ]; do
+  if (( SECONDS >= boot_deadline )); then
+    echo "EMULATOR BOOT TIMED OUT"
+    exit 1
+  fi
+  sleep 2
+done
+adb shell settings put global hide_error_dialogs 1 || exit 1
+adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS || exit 1
+adb shell input keyevent KEYCODE_HOME || exit 1
+sleep 10
 until adb shell pm path android >/dev/null 2>&1; do sleep 2; done # package manager ready; -u also lists packages kept after a per-user uninstall
 for p in $(adb shell pm list packages -u com.neurostenographer | tr -d '\r' | sed 's/^package://'); do
   echo "uninstall stale $p: $(adb uninstall "$p" 2>&1 | tr -d '\r')"

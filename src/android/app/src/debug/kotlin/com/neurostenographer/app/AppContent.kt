@@ -1,23 +1,24 @@
 package com.neurostenographer.app
 
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.saveable.rememberSaveable
-import androidx.compose.runtime.setValue
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import app.frontdebug.FrontExportDemo
-import app.frontdebug.FrontPipelineDemo
+import androidx.compose.runtime.Composable
+import androidx.compose.runtime.remember
+import app.frontdebug.ObservedDebugPipeline
+import androidx.compose.ui.Modifier
+import androidx.compose.ui.unit.dp
+import com.neurostenographer.app.di.rememberAppGraph
 
 @Composable
 internal fun AppContent() {
-    var exportDemo by rememberSaveable { mutableStateOf(false) }
+    val graph = rememberAppGraph()
+    val observedPipeline = remember(graph.pipeline) { ObservedDebugPipeline(graph.pipeline) }
     Column {
-        TextButton(onClick = { exportDemo = !exportDemo }) {
-            Text(if (exportDemo) "DEBUG: к импорту" else "DEBUG: проверить сохранение JSON")
-        }
-        if (exportDemo) FrontExportDemo { exportDemo = false } else FrontPipelineDemo()
+        Text(
+            "DEBUG · Настоящие импорт и экспорт. Движки синтетические, модели не запускались.",
+            modifier = Modifier.padding(16.dp),
+        )
+        AppFlow(observedPipeline, graph.exporter, Modifier.weight(1f))
     }
 }

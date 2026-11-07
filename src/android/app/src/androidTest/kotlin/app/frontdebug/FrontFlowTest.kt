@@ -102,11 +102,10 @@ class FrontFlowTest {
                 }
                 exportName = edit.text.toString().let { if (it.endsWith(".json")) it else "$it.json" }
                 require(exportName!!.matches(Regex("transcript-[0-9-]+\\.json")))
-                val save = waitFor("enabled SAF Save button") {
+                clickWhenReady("enabled SAF Save button") {
                     find { it.isEnabled && (it.viewIdResourceName == "android:id/button1" ||
                         it.text?.toString()?.lowercase() in setOf("save", "сохранить")) }
                 }
-                click(save)
                 waitAppText("JSON сохранён")
                 capture("front-json-saved")
                 val json = JSONObject(shell("cat /sdcard/Download/${exportName!!}"))
@@ -160,11 +159,11 @@ class FrontFlowTest {
             find { it.contentDescription?.toString()?.lowercase() in navigationNames } ?: downloads()
         }
         if (navigationOrRoot.contentDescription?.toString()?.lowercase() in navigationNames) {
-            click(navigationOrRoot)
-            click(waitFor("Downloads root in SAF drawer") { downloads() })
-        } else {
-            click(navigationOrRoot)
+            clickWhenReady("SAF navigation drawer") {
+                find { it.contentDescription?.toString()?.lowercase() in navigationNames }
+            }
         }
+        clickWhenReady("Downloads root in SAF drawer") { downloads() }
     }
 
     private fun activeRoot(): AccessibilityNodeInfo? {
@@ -198,12 +197,24 @@ class FrontFlowTest {
         compose.onNode(matcher).performClick()
     }
 
-    private fun clickText(text: String) = click(waitText(text))
-    private fun waitText(text: String) = waitFor("system text: $text") { find { it.text?.toString() == text } }
-    private fun click(node: AccessibilityNodeInfo) {
-        var target: AccessibilityNodeInfo? = node
-        while (target != null && !target.isClickable) target = target.parent
-        assertTrue("Accessible click failed", target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true)
+    private fun clickText(text: String) = clickWhenReady("system text: $text") {
+        find { it.text?.toString() == text }
+    }
+
+    private fun clickWhenReady(description: String, findNode: () -> AccessibilityNodeInfo?) {
+        // DocumentsUI can expose a node before its window transition finishes. Reacquire
+        // it on every poll: a node cached by waitFor may already be stale at ACTION_CLICK.
+        awaitCondition("successful accessible click: $description") {
+            try {
+                var target = findNode()
+                while (target != null && !(target.isClickable && target.isEnabled && target.isVisibleToUser)) {
+                    target = target.parent
+                }
+                target?.performAction(AccessibilityNodeInfo.ACTION_CLICK) == true
+            } catch (_: IllegalStateException) {
+                false // node invalidated by a window change; the next poll gets a fresh root
+            }
+        }
     }
     private fun find(predicate: (AccessibilityNodeInfo) -> Boolean): AccessibilityNodeInfo? {
         fun visit(node: AccessibilityNodeInfo?): AccessibilityNodeInfo? {

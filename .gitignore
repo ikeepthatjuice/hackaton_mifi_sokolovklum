@@ -18,6 +18,9 @@
 *.pt
 *.tflite
 
+# Native prebuilt, скачивается scripts/fetch-native.sh
+/external/sherpa-onnx-android/
+
 # Сборка, кэши, IDE
 build/
 .gradle/

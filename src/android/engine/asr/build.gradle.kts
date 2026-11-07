@@ -20,7 +20,8 @@ android {
         externalNativeBuild {
             cmake {
                 cppFlags("-std=c++17 -O3 -fvisibility=hidden")
-                arguments("-DANDROID_STL=c++_shared")
+                // Native engines are always optimized: ggml at -O0 (AGP debug default) made ASR ~30x slower on A51.
+                arguments("-DANDROID_STL=c++_shared", "-DCMAKE_BUILD_TYPE=Release")
             }
         }
     }

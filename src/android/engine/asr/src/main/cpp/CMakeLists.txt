@@ -23,3 +23,31 @@ target_link_libraries(whisper_jni PRIVATE
     whisper
     ${log-lib}
 )
+
+# Sherpa-onnx for GigaAM Transducer ASR
+set(REPO_ROOT "${CMAKE_CURRENT_SOURCE_DIR}/../../../../../../..")
+set(SHERPA_ANDROID_DIR "${REPO_ROOT}/external/sherpa-onnx-android")
+
+add_library(sherpa-onnx-c-api SHARED IMPORTED)
+set_target_properties(sherpa-onnx-c-api PROPERTIES
+    IMPORTED_LOCATION "${SHERPA_ANDROID_DIR}/jniLibs/${ANDROID_ABI}/libsherpa-onnx-c-api.so"
+)
+
+add_library(onnxruntime SHARED IMPORTED)
+set_target_properties(onnxruntime PROPERTIES
+    IMPORTED_LOCATION "${SHERPA_ANDROID_DIR}/jniLibs/${ANDROID_ABI}/libonnxruntime.so"
+)
+
+include_directories(
+    "${SHERPA_ANDROID_DIR}/include"
+)
+
+add_library(gigaam_jni SHARED
+    gigaam_jni.cpp
+)
+
+target_link_libraries(gigaam_jni PRIVATE
+    sherpa-onnx-c-api
+    onnxruntime
+    ${log-lib}
+)

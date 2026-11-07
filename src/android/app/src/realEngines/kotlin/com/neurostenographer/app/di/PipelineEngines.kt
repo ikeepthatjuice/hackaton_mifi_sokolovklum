@@ -46,6 +46,8 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
         try {
             generator.prepare()
         } catch (e: CancellationException) {
+            // load() has not returned ownership to stage(), so release here on cancellation.
+            generator.close()
             throw e
         } catch (e: Exception) {
             Log.w("PipelineEngines", "LLM warm-up failed: ${e.javaClass.simpleName}")

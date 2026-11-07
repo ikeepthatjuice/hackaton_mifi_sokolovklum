@@ -256,7 +256,7 @@ class DefaultTranscriptionPipelineTest {
         assertEquals(PipelineState.Failed(PipelineError.OUT_OF_MEMORY), p.observe(id).value)
     }
 
-    // 6 utterances → portions of 4 + 2. Fakes take 5000 ms audio, so the budget is 1500 ms.
+    // 6 utterances, one per LLM call. Fakes take 5000 ms audio: cap = max(1500, 20 000) = 20 000 ms.
     private fun sixUtterances() {
         world.turns = (0 until 6).map { SpeakerTurn("speaker_${it % 2 + 1}", it * 800L, it * 800L + 800L) }
         world.words = (0 until 6).map { AsrWord("слово$it", it * 800L + 100L, it * 800L + 500L) }
@@ -266,43 +266,58 @@ class DefaultTranscriptionPipelineTest {
     fun postprocessDeadlineCompletesWithRawTextAndWarningAndReleasesModel() = runTest {
         val p = pipeline()
         sixUtterances()
-        world.generationDelayMs = 2000L // first portion alone outlasts the 1500 ms budget
+        world.generationDelayMs = 8000L // calls end at 8 s and 16 s; the third is interrupted at the 20 s cap
         val id = p.start("content://synthetic/deadline")
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
-        assertEquals(2000L, testScheduler.currentTime) // first portion finished, the rest was cut at once
-        assertEquals("budget expired during the first portion: no second call", listOf(4), world.postprocessCalls)
-        assertEquals(listOf("Слово0.", "Слово1.", "Слово2.", "Слово3.", "слово4", "слово5"), completed.result.utterances.map { it.displayText })
-        assertEquals(listOf("Пунктуация и регистр обработаны в 4 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), completed.result.warnings)
+        assertEquals(20_000L, testScheduler.currentTime)
+        assertEquals(listOf(1, 1, 1), world.postprocessCalls)
+        assertEquals(listOf("Слово0.", "Слово1.", "слово2", "слово3", "слово4", "слово5"), completed.result.utterances.map { it.displayText })
+        assertEquals(listOf("Пунктуация и регистр обработаны в 2 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), completed.result.warnings)
         assertEquals(0, world.loadedNow)
         assertFalse(jobDir(id).exists())
     }
 
     @Test
-    fun firstPortionAlwaysFinishesEvenOverBudget() = runTest {
+    fun firstPortionIsOneUtteranceAndCapInterruptsIt() = runTest {
         val p = pipeline()
-        world.generationDelayMs = 5000L // 2 utterances = one portion, well over the 1500 ms budget
+        world.generationDelayMs = 30_000L // one utterance takes longer than the 20 s cap
         val id = p.start("content://synthetic/one-portion")
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
-        assertEquals(listOf("Привет.", "Здравствуйте."), completed.result.utterances.map { it.displayText })
-        assertTrue(completed.result.warnings.isEmpty())
+        assertEquals(20_000L, testScheduler.currentTime)
+        assertEquals(listOf(1), world.postprocessCalls)
+        assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
+        assertEquals(listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст."), completed.result.warnings)
         assertEquals(0, world.loadedNow)
+    }
+
+    @Test
+    fun capIsThirtyPercentForLongAudio() = runTest {
+        val p = pipeline()
+        world.durationMs = 100_000L // 30% = 30 s > 20 s floor
+        world.generationDelayMs = 25_000L // would be cut at 20 s, fits in 30 s
+        val id = p.start("content://synthetic/long")
+        advanceUntilIdle()
+        val completed = p.observe(id).value as PipelineState.Completed
+        assertEquals(listOf(1, 1), world.postprocessCalls) // the second call starts at 25 s and is cut at 30 s
+        assertEquals(30_000L, testScheduler.currentTime)
+        assertEquals(listOf("Привет.", "здравствуйте"), completed.result.utterances.map { it.displayText })
     }
 
     @Test
     fun budgetTimeoutKeepsFinishedPortionsAndCountsThem() = runTest {
         val p = pipeline()
         sixUtterances()
-        world.generationDelayMs = 1000L // first portion ends at 1000 ms, the second is cut at 1500 ms
+        world.generationDelayMs = 15_000L // first call ends at 15 s, the second is interrupted at 20 s
         val id = p.start("content://synthetic/portions")
         advanceUntilIdle()
 
         val result = (p.observe(id).value as PipelineState.Completed).result
-        assertEquals(1500L, testScheduler.currentTime)
-        assertEquals(listOf(4, 2), world.postprocessCalls)
-        assertEquals(listOf("Слово0.", "Слово1.", "Слово2.", "Слово3.", "слово4", "слово5"), result.utterances.map { it.displayText })
-        assertEquals(listOf("Пунктуация и регистр обработаны в 4 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), result.warnings)
+        assertEquals(20_000L, testScheduler.currentTime)
+        assertEquals(listOf(1, 1), world.postprocessCalls)
+        assertEquals(listOf("Слово0.", "слово1", "слово2", "слово3", "слово4", "слово5"), result.utterances.map { it.displayText })
+        assertEquals(listOf("Пунктуация и регистр обработаны в 1 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), result.warnings)
         assertEquals(0, world.loadedNow)
     }
 
@@ -311,11 +326,11 @@ class DefaultTranscriptionPipelineTest {
         val p = pipeline()
         models.llmDelayMs = 2000L
         world.llmLoadDelayMs = 3000L
-        world.generationDelayMs = 1400L // still below the full 1500ms generation allowance
+        world.generationDelayMs = 9_000L // two calls (1 + 1): 18 s, below the 20 s cap
         val id = p.start("content://synthetic/slow-load")
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
-        assertEquals(6400L, testScheduler.currentTime)
+        assertEquals(23_000L, testScheduler.currentTime) // 2000 copy + 3000 load + 2 x 9000
         assertTrue(completed.result.warnings.isEmpty())
         assertEquals(listOf("Привет.", "Здравствуйте."), completed.result.utterances.map { it.displayText })
         assertEquals(0, world.loadedNow)
@@ -327,13 +342,13 @@ class DefaultTranscriptionPipelineTest {
         models.llmDelayMs = 2000L
         world.llmLoadDelayMs = 3000L
         sixUtterances()
-        world.generationDelayMs = 2000L
+        world.generationDelayMs = 8000L
         val id = p.start("content://synthetic/slow-load-timeout")
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
-        assertEquals(7000L, testScheduler.currentTime) // 2000 copy + 3000 load + 2000 first portion
-        assertEquals(listOf("слово4", "слово5"), completed.result.utterances.drop(4).map { it.displayText })
-        assertTrue(completed.result.warnings.single().contains("4 из 6"))
+        assertEquals(25_000L, testScheduler.currentTime) // 2000 copy + 3000 load + 20 000 cap
+        assertEquals(listOf("Слово0.", "Слово1.", "слово2", "слово3", "слово4", "слово5"), completed.result.utterances.map { it.displayText })
+        assertTrue(completed.result.warnings.single().contains("2 из 6"))
         assertEquals(0, world.loadedNow)
     }
 

@@ -1,6 +1,6 @@
 # Q4: диагностика, batching и бюджет POSTPROCESS
 
-7 ноября 2026, продолжение #6 в #23. Изменения только через feat/llm-qa-q4-budget; самостоятельного merge нет. Повторный физический A51-прогон новой версии ещё не получен.
+7 ноября 2026, продолжение #6 в #23. Изменения только через feat/llm-qa-q4-budget; самостоятельного merge нет. Получен командный A51-прогон standalone 1d68a73: cold 71448ms / warm 15168ms, PSS 693MB, accepted/changed=true; общий batching/budget на телефоне ещё не проверен.
 
 ## Пункты 1–3: новый артефакт телефона
 
@@ -43,9 +43,9 @@ LocalTranscriptPostprocessor теперь AutoCloseable: существующи�
 - LLM unit/JNI: scalar guard, think cleanup, batch ids/per-row fallback, отмена/reuse и ownership настоящего runtime.
 - Pipeline unit: deadline → raw+warning/cleanup, подготовка/загрузка не расходуют бюджет генерации; ошибки LLM дают все rawText + warning, быстрый путь без warning, user cancel и чужая engine cancellation различаются. Для5s synthetic audio deadline проверяется на1500ms виртуального времени.
 - Общий CI/Emulator проверяются на текущем SHA PR отдельно. Веса, SDK, downloaded runtime sources, signing key и APK не коммитятся.
-- models/manifest.json убран из diff #23 до merge #2. После merge обычным merge подтягивается main и добавляется только Q4 без изменений проверенных ML-записей; app DI/общие contracts этим изменением не переписаны. Потребители pipeline и warning должны ревьюить core/pipeline.
+- models/manifest.json по повторному поручению добавлен до merge #2: проверенные три ML-записи из #2 SHA84cd472 сохранены дословно, добавлена только Q4. После merge #2 main подтягивается обычным merge; дубликат Q4 не добавляется; app DI/общие contracts этим изменением не переписаны. Потребители pipeline и warning должны ревьюить core/pipeline.
 
-Перед merge нужны Илья (LLM/native), Ярик (manifest/pipeline), Санёк (docs и потребитель pipeline). После1–3 команда повторяет A51 raw/guard/PSS/time; batching/budget затем проверяет на общем pipeline с реальным аудио без передачи кейса в логи.
+Перед merge нужны Илья (LLM/native), Ярик (manifest/pipeline), Санёк (docs и потребитель pipeline). A51 raw/guard/PSS/time пунктов 1–3 получены, см. A51_LLM_CHECKPOINT.md; batching/budget затем проверяют на общем pipeline с реальным аудио без передачи кейса в логи.
 
 ## Уточнение перед merge #23
 
@@ -68,4 +68,4 @@ AudioPreparationException из Android-исходников; Android ModelStore/
 генерирует через уже загруженный handle: загрузка действительно завершена до generate.
 Ошибки copy/load/inference/internal cancellation/native/OOM/close, неизменность всех DTO
 при fallback и отмена во время подготовки и генерации покрыты тестами.
-Физический A51 и новый APK на этом изменении не запускались/не собирались.
+Агент физический A51 не запускал и APK новых budget-правок не собирал; тестировщик подтвердил отдельный standalone 1d68a73, см. A51_LLM_CHECKPOINT.md.

@@ -14,6 +14,6 @@
     "size_bytes": 396704928,
     "quantization": "Q4_K_M",
     "license": "Apache-2.0",
-    "note": "Third-party quantization. Downloaded bytes verified. Local target name differs from source basename; use this file field. Android device re-test pending."
+    "note": "Third-party quantization. Downloaded bytes verified. Local target name differs from source basename; use this file field. Galaxy A51 Android 13 offline synthetic diagnostic passed (source 1d68a73, APK SHA 9aa2906ca79a30702b64d2265c0f8cef17cc12b2f62e0119dc2363adcc3c8da1); integrated batching/budget device test pending."
   }
 }

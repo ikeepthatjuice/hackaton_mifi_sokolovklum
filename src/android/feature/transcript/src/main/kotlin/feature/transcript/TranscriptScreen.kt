@@ -1,6 +1,8 @@
 package feature.transcript
 
 import androidx.compose.foundation.layout.Arrangement
+import androidx.compose.foundation.ExperimentalFoundationApi
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -12,13 +14,16 @@ import androidx.compose.material3.Card
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.platform.testTag
 import androidx.compose.ui.unit.dp
 import core.contracts.TranscriptResult
 
 /** Displays the shared result without changing text, speaker IDs or times. */
 @Composable
+@OptIn(ExperimentalFoundationApi::class)
 fun TranscriptScreen(
     result: TranscriptResult,
     onSaveJson: () -> Unit,
@@ -27,6 +32,12 @@ fun TranscriptScreen(
     exportAvailable: Boolean = false,
     exportInProgress: Boolean = false,
     exportMessage: String? = null,
+    speakerNames: Map<String, String> = emptyMap(),
+    onRenameSpeaker: ((String) -> Unit)? = null,
+    onUtteranceActions: ((String) -> Unit)? = null,
+    canUndo: Boolean = false,
+    onUndo: (() -> Unit)? = null,
+    editMessage: String? = null,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 24.dp),
@@ -40,6 +51,10 @@ fun TranscriptScreen(
             )
         }
         item { Text("Реплик: ${result.utterances.size}") }
+        if (onUndo != null) item {
+            OutlinedButton(onClick = onUndo, enabled = canUndo) { Text("Отменить последнюю правку") }
+        }
+        if (editMessage != null) item { Text(editMessage) }
         if (result.warnings.isNotEmpty()) {
             item { Text(result.warnings.joinToString("\n")) }
         }
@@ -64,12 +79,19 @@ fun TranscriptScreen(
             item { Text("Речь в записи не обнаружена") }
         }
         items(result.utterances, key = { it.id }) { utterance ->
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(modifier = Modifier.fillMaxWidth().testTag("utterance:${utterance.id}").then(
+                if (onUtteranceActions == null) Modifier else Modifier.combinedClickable(
+                    onClick = {}, onLongClickLabel = "Действия с репликой",
+                    onLongClick = { onUtteranceActions(utterance.id) },
+                ),
+            )) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
-                    Text(utterance.speakerId, style = MaterialTheme.typography.titleMedium)
+                    val name = speakerNames[utterance.speakerId] ?: utterance.speakerId
+                    if (onRenameSpeaker == null) Text(name, style = MaterialTheme.typography.titleMedium)
+                    else TextButton(onClick = { onRenameSpeaker(utterance.speakerId) }) { Text(name) }
                     Text("${formatTimestamp(utterance.startMs)} — ${formatTimestamp(utterance.endMs)}")
                     Text(utterance.displayText)
                 }

@@ -27,7 +27,7 @@ route передаёт Failed.requiredBytes, mapper обрабатывает typ
 
 Зависимости: требуются aliases androidx-lifecycle-viewmodel-ktx,
 androidx-lifecycle-viewmodel-compose, androidx-lifecycle-runtime-compose на существующем
-version.ref androidx-lifecycle (2.8.6). Запрошены у Ярика; до их появления сборка заблокирована.
+version.ref androidx-lifecycle (2.8.6). Back добавил их в #19; CI ветки ждёт merge #19 в main.
 Корневой каталог front не редактирует.
 
 Девять тестов PipelineSessionTest: повторный start, позднее состояние старого job,
@@ -40,7 +40,11 @@ Temurin JDK17 / SDK34; assembleDebug test lint assembleDebugAndroidTest — PASS
 16 import unit tests (9 PipelineSession + 7 controller) в debug/release — PASS.
 Стенд FrontUxPreviewActivity только src/debug, 500 вымышленных реплик, fontScale 2.0.
 4 FrontLayoutTest: landscape/recreate, длинный список, storage ceil, disabled Save.
-Компиляция androidTest — PASS; запуск на эмуляторе пока NOT RUN.
+Все 4 FrontLayoutTest прошли на API34 Google APIs arm64-v8a (Pixel6 AVD), авиарежим.
+Интеграционный FrontFlowTest из #20 также PASS: настоящий SAF/decode/export, отмена выбора,
+отмена pipeline, повтор, recreate, JSON и запуск после Completed (движки только synthetic debug).
+Общий connectedDebugAndroidTest: app 5, audio 3, export 2, pipeline 5 — 15/15 PASS.
+Guard picker блокирует повторный launch; cancel снимает busy, launch-error отделён от selectionFailed.
 CI самого #14 красный до merge catalog #19 в main; Draft сохраняется.
 Back commits не включены в опубликованную front-ветку.
 Reviewer: Ярик @lockermon4; интеграцию также передать «на ревью Claude» через него.

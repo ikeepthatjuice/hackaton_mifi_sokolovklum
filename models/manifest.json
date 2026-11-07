@@ -16,8 +16,8 @@
       "format": "GGML",
       "quantization": "FP16",
       "input_format": "PCM mono 16000 Hz, headerless float32 little-endian [-1.0, 1.0]",
-      "size_bytes": 147964211,
-      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf00eec29073ba81a4d4ea8aec",
+      "size_bytes": 147951465,
+      "sha256": "60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe",
       "memory_ram_mb": 160
     },
     {
@@ -33,8 +33,8 @@
       "format": "ONNX",
       "quantization": "FP32",
       "input_format": "PCM mono 16000 Hz, float32 [-1.0, 1.0]",
-      "size_bytes": 6059288,
-      "sha256": "893c52e411b439c2c8f85f3ce010a300da58908ec8e0f6c278fb7785beab4aa7",
+      "size_bytes": 5992913,
+      "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
       "memory_ram_mb": 35
     },
     {
@@ -50,8 +50,8 @@
       "format": "ONNX",
       "quantization": "FP32",
       "input_format": "PCM mono 16000 Hz, float32 [-1.0, 1.0]",
-      "size_bytes": 26861502,
-      "sha256": "4b68079a4058f967ad7f5e8e3c54d398f51a44e5914fa6463994326588db2b90",
+      "size_bytes": 39593761,
+      "sha256": "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
       "memory_ram_mb": 45
     }
   ]

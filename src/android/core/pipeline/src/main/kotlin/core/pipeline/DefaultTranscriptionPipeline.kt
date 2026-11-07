@@ -110,22 +110,24 @@ class DefaultTranscriptionPipeline(
 
             state.value = PipelineState.Running(Stage.POSTPROCESS, null)
             // Resolve/copy and EngineSpec.load finish BEFORE the generation budget starts.
-            val budgetMs = (audio.durationMs.coerceAtLeast(0).toDouble() * 0.30).toLong().coerceAtLeast(1L)
+            // Cap = max(30% of audio, POSTPROCESS_MIN_BUDGET_MS): short recordings still get one utterance.
+            val budgetMs = maxOf((audio.durationMs.coerceAtLeast(0).toDouble() * 0.30).toLong(), POSTPROCESS_MIN_BUDGET_MS)
             var warnings = emptyList<String>()
             val raw = { utterances.map { it.copy(displayText = it.rawText) } }
             val processed = try {
-                // Budget = max(30% of audio, one portion): the first portion always finishes; later portions
-                // run only while the budget lasts. Finished portions are kept, the rest stay raw.
+                // First portion = 1 utterance (fast first result), then POSTPROCESS_PORTION at a time.
+                // At the cap the running portion is cancelled: llama.cpp checks Thread.isInterrupted per
+                // decode step, so generation stops. Finished portions are kept, the rest stay raw.
                 val done = stage(engines.postprocessor, suppressCloseErrors = false) { processor ->
                     val done = ArrayList<Utterance>(utterances.size)
-                    val portions = utterances.chunked(POSTPROCESS_PORTION)
+                    val portions = utterances.take(1).let { if (it.isEmpty()) emptyList() else listOf(it) } +
+                        utterances.drop(1).chunked(POSTPROCESS_PORTION)
                     coroutineScope {
-                        val budget = launch { delay(budgetMs) } // generation clock starts with the first portion
-                        portions.firstOrNull()?.let { done += engineCall { processor.process(it) } }
-                        val rest = launch { for (portion in portions.drop(1)) done += engineCall { processor.process(portion) } }
+                        val budget = launch { delay(budgetMs) }
+                        val work = launch { for (portion in portions) done += engineCall { processor.process(portion) } }
                         select<Unit> {
-                            rest.onJoin {}
-                            budget.onJoin { rest.cancelAndJoin() }
+                            work.onJoin {}
+                            budget.onJoin { work.cancelAndJoin() }
                         }
                         budget.cancel()
                     }
@@ -202,6 +204,8 @@ class DefaultTranscriptionPipeline(
     private companion object {
         /** Utterances per LLM call: small enough to keep progress on timeout, large enough for batching. */
         const val POSTPROCESS_PORTION = 4
+        /** Floor of the LLM cap: a 10 s clip would otherwise get 3 s, less than one utterance on A51. */
+        const val POSTPROCESS_MIN_BUDGET_MS = 20_000L
     }
 
     private fun deleteJobDir(jobId: String) {

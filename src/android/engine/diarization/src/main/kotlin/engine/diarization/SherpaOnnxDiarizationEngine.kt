@@ -189,8 +189,7 @@ class SherpaOnnxDiarizationEngine(
         // 3. Identify significant clusters (total speech >= minSpeakerTotalDurationMs, e.g. 2000 ms)
         val significantClusters = clusterDurations.filter { it.value >= config.minSpeakerTotalDurationMs }.keys
         val targetClusters = if (significantClusters.isEmpty()) {
-            val dominant = clusterDurations.maxByOrNull { it.value }?.key
-            if (dominant != null) setOf(dominant) else clusterDurations.keys
+            clusterDurations.keys
         } else {
             significantClusters
         }

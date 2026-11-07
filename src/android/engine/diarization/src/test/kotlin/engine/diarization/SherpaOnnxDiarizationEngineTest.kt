@@ -48,13 +48,13 @@ class SherpaOnnxDiarizationEngineTest {
     fun `test returning first voice retains original ID across multi-speaker conversation`() {
         val engine = SherpaOnnxDiarizationEngine()
         val segments = listOf(
-            SherpaOnnxSegment(clusterId = 100, startMs = 1000, endMs = 3000),
-            SherpaOnnxSegment(clusterId = 200, startMs = 3500, endMs = 5000),
-            SherpaOnnxSegment(clusterId = 300, startMs = 5500, endMs = 7000),
-            SherpaOnnxSegment(clusterId = 100, startMs = 7500, endMs = 9000)
+            SherpaOnnxSegment(clusterId = 100, startMs = 1000, endMs = 3500),
+            SherpaOnnxSegment(clusterId = 200, startMs = 4000, endMs = 6500),
+            SherpaOnnxSegment(clusterId = 300, startMs = 7000, endMs = 9500),
+            SherpaOnnxSegment(clusterId = 100, startMs = 10000, endMs = 12500)
         )
 
-        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 10000)
+        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 15000)
 
         assertEquals(4, turns.size)
         assertEquals("speaker_1", turns[0].speakerId)

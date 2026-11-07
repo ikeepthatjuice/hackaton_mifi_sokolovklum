@@ -32,3 +32,11 @@ FrontDebugStarts хранит только job IDs для проверки чи�
 FrontFlowTest поворачивает MainActivity в landscape во время обработки, затем в portrait,
 делает recreate и проверяет неизменность списка start IDs. Всего ровно три запуска:
 первый отменён, второй сохранён в JSON, третий после Completed; поворот их не добавляет.
+
+После merge #18: все перечисленные зависимости в origin/main 02a54f4; ветка обновлена обычным merge origin/main. Все device-результаты выше относятся к эмулятору на Mac, не к физическому телефону. Актуальные самостоятельные проверки и CI фиксируются в описании PR.
+
+Самостоятельная проверка ветки после принятых зависимостей (main 02a54f4):
+- ./gradlew --configure-on-demand :app:assembleDebug :app:assembleRelease :app:test :app:lint :app:assembleDebugAndroidTest — PASS (54s).
+- ./gradlew --configure-on-demand :app:connectedDebugAndroidTest — 5/5 PASS (33s), API34 ARM64 AVD. Включает системный SAF, cancel/retry, поворот/recreate, JSON write/readback, ровно три start.
+- Проверка ограничена app и его зависимостями; полный root build нового engine:llm этой командой не проверен.
+- forbidden и diff check — PASS. Синтетические движки только debug, качество реальных моделей не измеряется.

@@ -23,7 +23,7 @@ class DefaultTranscriptionPipelineTest {
     private lateinit var world: FakeWorld
     private lateinit var models: FakeModelStore
 
-    private fun TestScope.pipeline(): DefaultTranscriptionPipeline {
+    private fun TestScope.pipeline(awaitModels: suspend () -> Unit = {}): DefaultTranscriptionPipeline {
         world = FakeWorld(tmp.newFolder())
         models = FakeModelStore(tmp.newFolder())
         return DefaultTranscriptionPipeline(
@@ -32,6 +32,7 @@ class DefaultTranscriptionPipelineTest {
             engines = fakeEngines(world),
             modelStore = models,
             dispatcher = StandardTestDispatcher(testScheduler),
+            awaitModels = awaitModels,
         )
     }
 
@@ -50,6 +51,30 @@ class DefaultTranscriptionPipelineTest {
         assertEquals(listOf("привет", "здравствуйте"), state.result.utterances.map { it.rawText })
         assertEquals(listOf("Привет.", "Здравствуйте."), state.result.utterances.map { it.displayText })
         assertFalse(jobDir(id).exists())
+    }
+
+    @Test
+    fun jobWaitsForModelCopyInImportThenRuns() = runTest {
+        val copied = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val p = pipeline(awaitModels = { copied.await() })
+        val id = p.start("content://synthetic/1")
+        advanceUntilIdle()
+        assertEquals(PipelineState.Running(Stage.IMPORT, null), p.observe(id).value)
+        assertEquals(emptyList<String>(), world.loadOrder)
+
+        copied.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(p.observe(id).value is PipelineState.Completed)
+    }
+
+    @Test
+    fun cancelWhileWaitingForModelsIsCancelled() = runTest {
+        val p = pipeline(awaitModels = { kotlinx.coroutines.awaitCancellation() })
+        val id = p.start("content://synthetic/1")
+        advanceUntilIdle()
+        p.cancel(id)
+        advanceUntilIdle()
+        assertEquals(PipelineState.Cancelled, p.observe(id).value)
     }
 
     @Test

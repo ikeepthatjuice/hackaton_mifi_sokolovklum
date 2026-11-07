@@ -38,6 +38,7 @@ import java.util.concurrent.ConcurrentHashMap
  * - `jobsDir/<jobId>/` is deleted after Completed, Failed or Cancelled.
  *
  * @param prepareAudio usually `AudioPreparer::prepare`; writes PCM under `jobsDir/<jobId>/`.
+ * @param awaitModels waits for the app-start model copy (assets → filesDir); the job stays in IMPORT meanwhile.
  */
 class DefaultTranscriptionPipeline(
     private val prepareAudio: suspend (audioUri: String, jobId: String) -> AudioInput,
@@ -45,6 +46,7 @@ class DefaultTranscriptionPipeline(
     private val engines: PipelineEngines,
     private val modelStore: ModelStore,
     dispatcher: CoroutineDispatcher,
+    private val awaitModels: suspend () -> Unit = {},
 ) : TranscriptionPipeline {
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -88,6 +90,7 @@ class DefaultTranscriptionPipeline(
 
     private suspend fun run(jobId: String, audioUri: String, state: MutableStateFlow<PipelineState>) {
         try {
+            awaitModels() // state is still Running(IMPORT)
             state.value = PipelineState.Running(Stage.DECODE, null)
             val audio = prepareAudio(audioUri, jobId)
 

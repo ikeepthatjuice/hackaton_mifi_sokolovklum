@@ -45,11 +45,17 @@ class FullCycleTest {
             }
         assertTrue("no audio file ${audio.name}", audio.isFile)
 
+        val engines = pipelineEngines(asrLanguage = args.getString("language") ?: "en")
+        val store = AssetModelStore(target)
+        // As AppGraph does at app start: one-time copy assets → filesDir, measured apart from processing.
+        val copyStart = SystemClock.elapsedRealtime()
+        listOf(engines.diarization, engines.asr, engines.postprocessor).flatMap { it.models }.forEach { store.ensureModel(it) }
+        Log.i(TAG, "models_ready_ms=${SystemClock.elapsedRealtime() - copyStart}")
         val pipeline = DefaultTranscriptionPipeline(
             prepareAudio = AudioPreparer(target)::prepare,
             jobsDir = File(target.filesDir, "jobs"),
-            engines = pipelineEngines(asrLanguage = args.getString("language") ?: "en"),
-            modelStore = AssetModelStore(target),
+            engines = engines,
+            modelStore = store,
             dispatcher = Dispatchers.Default,
         )
 

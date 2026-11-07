@@ -15,8 +15,8 @@ import java.io.File
 
 /**
  * App-wide dependencies, one instance per process (the pipeline keeps job state and must survive
- * recomposition and rotation). Engines come from the build type: debug — synthetic engines
- * (src/debug), release — real engines (B6, after the engine modules are merged).
+ * recomposition and rotation). Engines come from the build: debug — synthetic engines
+ * (src/fakeEngines), release or debug with -PrealEngines — real engines (src/realEngines).
  */
 class AppGraph private constructor(context: Context) {
 

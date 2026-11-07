@@ -13,7 +13,8 @@ android {
         ndk { abiFilters += listOf("arm64-v8a", "x86_64") }
         consumerProguardFiles("consumer-rules.pro")
         externalNativeBuild {
-            cmake { arguments += "-DLLAMA_CPP_DIR=${project.layout.projectDirectory.dir("external/llama.cpp").asFile}" }
+            // Native engines are always optimized: ggml at -O0 (AGP debug default) made ASR ~30x slower on A51.
+            cmake { arguments += listOf("-DLLAMA_CPP_DIR=${project.layout.projectDirectory.dir("external/llama.cpp").asFile}", "-DCMAKE_BUILD_TYPE=Release") }
         }
     }
     externalNativeBuild {

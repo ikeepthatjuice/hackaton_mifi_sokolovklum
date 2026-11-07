@@ -40,13 +40,16 @@ class FrontUxPreviewActivity : ComponentActivity() {
                             "storage" -> PipelineFailureScreen(
                                 PipelineError.INSUFFICIENT_STORAGE, {}, { screen = "import" }, requiredBytes = 1_048_577,
                             )
-                            "transcript", "saving", "llm-timeout", "llm-failure" -> TranscriptScreen(
+                            "transcript", "saving", "llm-timeout", "llm-failure", "llm-partial" -> TranscriptScreen(
                                 result = when (screen) {
                                     "llm-timeout" -> longSyntheticResult.copy(warnings = listOf(
                                         "Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.",
                                     ))
                                     "llm-failure" -> longSyntheticResult.copy(warnings = listOf(
                                         "Пунктуация не обработана: ошибка локальной LLM",
+                                    ))
+                                    "llm-partial" -> longSyntheticResult.copy(warnings = listOf(
+                                        "Пунктуация и регистр обработаны в 2 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст.",
                                     ))
                                     else -> longSyntheticResult
                                 },

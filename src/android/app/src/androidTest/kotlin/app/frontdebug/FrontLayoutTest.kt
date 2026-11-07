@@ -11,10 +11,14 @@ import androidx.compose.ui.test.onNodeWithText
 import androidx.compose.ui.test.performClick
 import androidx.compose.ui.test.performScrollTo
 import androidx.compose.ui.test.performScrollToKey
+import androidx.compose.ui.test.performSemanticsAction
+import androidx.compose.ui.semantics.SemanticsActions
+import androidx.compose.ui.text.TextLayoutResult
 import androidx.test.core.app.ActivityScenario
 import androidx.test.platform.app.InstrumentationRegistry
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import org.junit.Rule
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import org.junit.runner.RunWith
 
@@ -64,14 +68,19 @@ class FrontLayoutTest {
     }
 
     @Test fun llmWarningsAreVisibleAndExportRemainsReachable() {
-        // The two warnings emitted by #23; only synthetic preview data, no model run.
+        // Full, failed and partial LLM outcomes; synthetic preview only, no model run.
         val warnings = listOf(
             "llm-timeout" to "Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.",
             "llm-failure" to "Пунктуация не обработана: ошибка локальной LLM",
+            "llm-partial" to "Пунктуация и регистр обработаны в 2 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст.",
         )
         for ((screen, warning) in warnings) {
             launch(screen).use {
                 compose.onNodeWithText(warning).performScrollTo().assertIsDisplayed()
+                val layouts = mutableListOf<TextLayoutResult>()
+                compose.onNodeWithText(warning).performSemanticsAction(SemanticsActions.GetTextLayoutResult) { it(layouts) }
+                assertTrue("Warning text must have a measured layout", layouts.isNotEmpty())
+                assertTrue("Full warning must not be truncated", layouts.none { it.hasVisualOverflow })
                 compose.onNode(hasScrollAction()).performScrollToKey("transcript:export")
                 compose.onNodeWithText("Сохранить JSON").assertIsDisplayed()
             }

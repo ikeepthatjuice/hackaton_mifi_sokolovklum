@@ -2,7 +2,12 @@ param (
     [string]$DestDir = "local_models"
 )
 
+# Downloads model weights listed in models/manifest.json (the single source of url/size/sha256)
+# into $DestDir and verifies size and SHA-256. Idempotent.
 $ErrorActionPreference = "Stop"
+
+$manifest = Join-Path $PSScriptRoot "..\models\manifest.json"
+$models = (Get-Content -Raw $manifest | ConvertFrom-Json).models
 
 if (!(Test-Path $DestDir)) {
     New-Item -ItemType Directory -Path $DestDir | Out-Null
@@ -10,48 +15,32 @@ if (!(Test-Path $DestDir)) {
 
 Write-Host "=== Fetching ML models into $DestDir ===" -ForegroundColor Cyan
 
-$models = @(
-    @{
-        Name = "ggml-base.bin"
-        Url = "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-base.bin"
-        Sha256 = "60ed5bc3dd14eea856493d334349b405782ddcaf00eec29073ba81a4d4ea8aec"
-    },
-    @{
-        Name = "sherpa-onnx-pyannote-segmentation-3-0.onnx"
-        Url = "https://huggingface.co/csukuangfj/sherpa-onnx-pyannote-segmentation-3-0/resolve/main/model.onnx"
-        Sha256 = "893c52e411b439c2c8f85f3ce010a300da58908ec8e0f6c278fb7785beab4aa7"
-    },
-    @{
-        Name = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
-        Url = "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
-        Sha256 = "4b68079a4058f967ad7f5e8e3c54d398f51a44e5914fa6463994326588db2b90"
-    }
-)
+function Test-Model($path, $m) {
+    (Test-Path $path) -and
+        ((Get-Item $path).Length -eq $m.size_bytes) -and
+        ((Get-FileHash -Path $path -Algorithm SHA256).Hash.ToLower() -eq $m.sha256.ToLower())
+}
 
-foreach ($item in $models) {
-    $targetPath = Join-Path $DestDir $item.Name
-    Write-Host "--- Checking $($item.Name) ---"
+foreach ($m in $models) {
+    $targetPath = Join-Path $DestDir $m.target_file
+    Write-Host "--- Checking $($m.target_file) ---"
 
-    $needDownload = $true
-    if (Test-Path $targetPath) {
-        $actualSha = (Get-FileHash -Path $targetPath -Algorithm SHA256).Hash.ToLower()
-        if ($actualSha -eq $item.Sha256.ToLower()) {
-            Write-Host "Already downloaded and checksum verified: $($item.Name)" -ForegroundColor Green
-            $needDownload = $false
-        } else {
-            Write-Host "Checksum mismatch for $($item.Name), re-downloading..." -ForegroundColor Yellow
-        }
+    if (Test-Model $targetPath $m) {
+        Write-Host "Already downloaded and verified: $($m.target_file)" -ForegroundColor Green
+        continue
     }
 
-    if ($needDownload) {
-        Write-Host "Downloading $($item.Name)..."
-        Invoke-WebRequest -Uri $item.Url -OutFile $targetPath -MaximumRedirection 5
-        $actualSha = (Get-FileHash -Path $targetPath -Algorithm SHA256).Hash.ToLower()
-        if ($actualSha -ne $item.Sha256.ToLower()) {
-            Write-Error "ERROR: Checksum mismatch for $($item.Name)! Expected: $($item.Sha256), Actual: $actualSha"
-        }
-        Write-Host "Verified SHA-256 for $($item.Name)." -ForegroundColor Green
+    Write-Host "Downloading $($m.target_file) from $($m.source_url)"
+    $tmp = "$targetPath.part"
+    Invoke-WebRequest -Uri $m.source_url -OutFile $tmp -MaximumRedirection 5
+    if (!(Test-Model $tmp $m)) {
+        $size = (Get-Item $tmp).Length
+        $sha = (Get-FileHash -Path $tmp -Algorithm SHA256).Hash.ToLower()
+        Remove-Item $tmp
+        Write-Error "ERROR: $($m.target_file) mismatch. Expected size=$($m.size_bytes) sha256=$($m.sha256); actual size=$size sha256=$sha"
     }
+    Move-Item -Force $tmp $targetPath
+    Write-Host "Verified size and SHA-256: $($m.target_file)" -ForegroundColor Green
 }
 
 Write-Host "=== All models downloaded and verified ===" -ForegroundColor Cyan

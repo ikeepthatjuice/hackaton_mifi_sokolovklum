@@ -43,23 +43,21 @@ fun TranscriptScreen(
         if (result.warnings.isNotEmpty()) {
             item { Text(result.warnings.joinToString("\n")) }
         }
+        // Separate lazy items keep each action reachable at large font sizes / in landscape.
         item {
-            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                Button(
-                    onClick = onSaveJson,
-                    enabled = exportAvailable && !exportInProgress,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text(if (exportInProgress) "Сохранение…" else "Сохранить JSON")
-                }
-                if (!exportAvailable) Text("Сохранение пока недоступно")
-                if (exportMessage != null) Text(exportMessage)
-                OutlinedButton(
-                    onClick = onChooseAnotherAudio,
-                    modifier = Modifier.fillMaxWidth(),
-                ) {
-                    Text("Выбрать другое аудио")
-                }
+            Button(
+                onClick = onSaveJson,
+                enabled = exportAvailable && !exportInProgress,
+                modifier = Modifier.fillMaxWidth(),
+            ) {
+                Text(if (exportInProgress) "Сохранение…" else "Сохранить JSON")
+            }
+        }
+        if (!exportAvailable) item { Text("Сохранение пока недоступно") }
+        if (exportMessage != null) item { Text(exportMessage) }
+        item {
+            OutlinedButton(onClick = onChooseAnotherAudio, modifier = Modifier.fillMaxWidth()) {
+                Text("Выбрать другое аудио")
             }
         }
         if (result.utterances.isEmpty()) {

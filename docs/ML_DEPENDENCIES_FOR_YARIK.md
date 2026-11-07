@@ -37,6 +37,6 @@
 - В конфигах `WhisperAsrConfig` и `SherpaOnnxDiarizationConfig` пути считаются относительно `filesDir` (по умолчанию `models/ggml-base.bin`, `models/sherpa-onnx-pyannote-segmentation-3-0.onnx`, `models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx`).
 
 ### Модели в `models/manifest.json`:
-- `ggml-base.bin`: 147 964 211 байт, SHA-256 `60ed5bc3dd14eea856493d334349b405782ddcaf00eec29073ba81a4d4ea8aec`
-- `sherpa-onnx-pyannote-segmentation-3-0.onnx`: 6 059 288 байт, SHA-256 `893c52e411b439c2c8f85f3ce010a300da58908ec8e0f6c278fb7785beab4aa7`
-- `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx`: 26 861 502 байт, SHA-256 `4b68079a4058f967ad7f5e8e3c54d398f51a44e5914fa6463994326588db2b90`
+- `ggml-base.bin`: 147 951 465 байт, SHA-256 `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe`
+- `sherpa-onnx-pyannote-segmentation-3-0.onnx`: 5 992 913 байт, SHA-256 `220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079`
+- `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx`: 39 593 761 байт, SHA-256 `1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b`

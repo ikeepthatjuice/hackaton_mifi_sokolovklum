@@ -37,6 +37,15 @@ jobs:
 
       - uses: gradle/actions/setup-gradle@v4
 
+      - name: Cache native deps
+        uses: actions/cache@v4
+        with:
+          path: external/sherpa-onnx-android/
+          key: native-${{ hashFiles('scripts/fetch-native.sh') }}
+
+      - name: Fetch native deps
+        run: bash scripts/fetch-native.sh
+
       # Without KVM the x86_64 emulator falls back to software and is too slow to boot.
       - name: Enable KVM
         run: |

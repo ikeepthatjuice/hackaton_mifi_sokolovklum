@@ -14,6 +14,7 @@ android {
         targetSdk = 34
         versionCode = 1
         versionName = "0.1.0"
+        testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
 
         ndk {
             abiFilters.addAll(listOf("arm64-v8a", "x86_64"))
@@ -56,6 +57,15 @@ dependencies {
     debugImplementation(libs.compose.ui.tooling)
     debugImplementation(libs.compose.runtime)
     debugImplementation(libs.compose.runtime.saveable)
+    debugImplementation(libs.androidx.lifecycle.viewmodel.ktx)
+    debugImplementation(libs.androidx.lifecycle.viewmodel.compose)
 
     testImplementation(libs.junit)
+
+    // UI tests in app/src/androidTest (front); run by emulator CI via connectedDebugAndroidTest.
+    androidTestImplementation(platform(libs.compose.bom))
+    androidTestImplementation(libs.compose.ui.test.junit4)
+    androidTestImplementation(libs.androidx.test.runner)
+    androidTestImplementation(libs.androidx.test.ext.junit)
+    debugImplementation(libs.compose.ui.test.manifest)
 }

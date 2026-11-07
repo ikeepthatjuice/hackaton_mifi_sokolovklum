@@ -11,18 +11,74 @@ import java.nio.ByteBuffer
 import java.nio.ByteOrder
 
 /**
+ * Supported embedding model architectures for offline speaker diarization.
+ */
+enum class SpeakerEmbeddingModel(
+    val defaultRelativePath: String,
+    val description: String
+) {
+    /**
+     * 3D-Speaker ERes2Net base model (~39.6 MB).
+     * High accuracy, default choice for offline speaker diarization.
+     */
+    ERES2NET(
+        defaultRelativePath = "models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+        description = "3D-Speaker ERes2Net Base"
+    ),
+
+    /**
+     * 3D-Speaker CAM++ model (~20.5 MB).
+     * Lightweight and fast alternative for low-power mobile devices.
+     */
+    CAMPPLUS(
+        defaultRelativePath = "models/3dspeaker_speech_campplus_sv_zh-cn_16k.onnx",
+        description = "3D-Speaker CAM++"
+    );
+}
+
+/**
  * Configuration for Sherpa-onnx Diarization engine.
+ *
+ * @param segmentationModelPath Path to pyannote segmentation ONNX model
+ * @param embeddingModelType High-level embedding model choice (ERES2NET by default, CAMPPLUS as fast option)
+ * @param embeddingModelPath Explicit path to embedding ONNX model (defaults to embeddingModelType.defaultRelativePath)
+ * @param baseDir Optional base directory to resolve relative paths
+ * @param clusteringThreshold Clustering threshold (e.g. 0.70f..0.85f; higher threshold -> fewer clusters). Default 0.75f.
+ * @param minSpeechDurationMs Minimum speech segment duration in ms (default 500ms)
+ * @param minSilenceDurationMs Minimum silence duration between segments in ms (default 500ms)
+ * @param minSpeakerTotalDurationMs Minimum total speech required for a speaker cluster to not be merged (default 2000ms)
+ * @param isFloat32Pcm True if PCM samples are 32-bit float LE
  */
 data class SherpaOnnxDiarizationConfig(
     val segmentationModelPath: String = "models/sherpa-onnx-pyannote-segmentation-3-0.onnx",
-    val embeddingModelPath: String = "models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
+    val embeddingModelType: SpeakerEmbeddingModel = SpeakerEmbeddingModel.ERES2NET,
+    val embeddingModelPath: String = embeddingModelType.defaultRelativePath,
     val baseDir: File? = null,
     val clusteringThreshold: Float = 0.75f,
     val minSpeechDurationMs: Long = 500L,
     val minSilenceDurationMs: Long = 500L,
     val minSpeakerTotalDurationMs: Long = 2000L,
     val isFloat32Pcm: Boolean = true
-)
+) {
+    companion object {
+        const val MODEL_ERES2NET = "models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+        const val MODEL_CAMPPLUS = "models/3dspeaker_speech_campplus_sv_zh-cn_16k.onnx"
+
+        fun withERes2Net(threshold: Float = 0.75f, baseDir: File? = null) = SherpaOnnxDiarizationConfig(
+            embeddingModelType = SpeakerEmbeddingModel.ERES2NET,
+            embeddingModelPath = MODEL_ERES2NET,
+            clusteringThreshold = threshold,
+            baseDir = baseDir
+        )
+
+        fun withCamPlus(threshold: Float = 0.75f, baseDir: File? = null) = SherpaOnnxDiarizationConfig(
+            embeddingModelType = SpeakerEmbeddingModel.CAMPPLUS,
+            embeddingModelPath = MODEL_CAMPPLUS,
+            clusteringThreshold = threshold,
+            baseDir = baseDir
+        )
+    }
+}
 
 /**
  * Offline Speaker Diarization Engine based on sherpa-onnx C-API.

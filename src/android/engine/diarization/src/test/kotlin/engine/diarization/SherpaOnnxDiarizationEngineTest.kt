@@ -160,4 +160,20 @@ class SherpaOnnxDiarizationEngineTest {
 
         assertTrue(turns.isEmpty())
     }
+
+    @Test
+    fun `test config factory withCamPlus sets campplus model and custom threshold`() {
+        val config = SherpaOnnxDiarizationConfig.withCamPlus(threshold = 0.82f)
+        assertEquals(SpeakerEmbeddingModel.CAMPPLUS, config.embeddingModelType)
+        assertEquals(SherpaOnnxDiarizationConfig.MODEL_CAMPPLUS, config.embeddingModelPath)
+        assertEquals(0.82f, config.clusteringThreshold, 0.001f)
+    }
+
+    @Test
+    fun `test config factory withERes2Net sets eres2net model and default threshold`() {
+        val config = SherpaOnnxDiarizationConfig.withERes2Net(threshold = 0.75f)
+        assertEquals(SpeakerEmbeddingModel.ERES2NET, config.embeddingModelType)
+        assertEquals(SherpaOnnxDiarizationConfig.MODEL_ERES2NET, config.embeddingModelPath)
+        assertEquals(0.75f, config.clusteringThreshold, 0.001f)
+    }
 }

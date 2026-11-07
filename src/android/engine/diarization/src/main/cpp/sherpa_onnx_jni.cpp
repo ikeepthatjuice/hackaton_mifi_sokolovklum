@@ -3,7 +3,7 @@
 #include <string>
 #include <vector>
 #include <cstring>
-#include "c-api.h"
+#include "sherpa-onnx/c-api/c-api.h" // layout from scripts/fetch-native.sh
 
 #define TAG "SherpaOnnxDiarizationJni"
 #define LOGI(...) __android_log_print(ANDROID_LOG_INFO, TAG, __VA_ARGS__)

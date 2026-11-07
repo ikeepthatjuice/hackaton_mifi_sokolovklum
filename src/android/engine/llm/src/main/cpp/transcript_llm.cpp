@@ -2,6 +2,12 @@
 #include "llama.h"
 #include "generation_budget.h"
 #include <algorithm>
+#include <chrono>
+#include <cstdio>
+#include <cstring>
+#ifdef __ANDROID__
+#include <android/log.h>
+#endif
 #include <atomic>
 #include <climits>
 #include <memory>
@@ -137,8 +143,44 @@ extern "C" JNIEXPORT jlong JNICALL Java_engine_llm_NativeBridge_open(
     }
 }
 
+namespace {
+// One logcat line per generate() call, numbers only: never prompt or output text.
+struct CallDiag {
+    using clock = std::chrono::steady_clock;
+    clock::time_point start = clock::now();
+    int prompt_tokens = -1, input_tokens = -1, max_tokens = -1, prefix_tokens = -1, gen_tokens = 0;
+    bool prefix_reused = false, think = false;
+    long long prefill_ms = -1, gen_ms = -1;
+    const char * outcome = "error";
+    static long long ms(clock::time_point a, clock::time_point b) {
+        return std::chrono::duration_cast<std::chrono::milliseconds>(b - a).count();
+    }
+    void error(const char * what) {
+        // Only our fixed error codes; anything else is reported as "exception".
+        static const char * known[] = {"arguments", "cancelled", "input limit", "input tokenize", "context limit",
+            "context", "decode", "cache trim", "sampler", "piece", "output limit", "generation limit"};
+        outcome = "exception";
+        for (auto * k : known) if (std::strcmp(k, what) == 0) outcome = k;
+    }
+    ~CallDiag() {
+        char line[320];
+        std::snprintf(line, sizeof line,
+            "prompt_tokens=%d input_tokens=%d prefix_tokens=%d prefix_reused=%d prefill_ms=%lld "
+            "gen_tokens=%d max_tokens=%d gen_ms=%lld think=%d total_ms=%lld outcome=%s",
+            prompt_tokens, input_tokens, prefix_tokens, prefix_reused ? 1 : 0, prefill_ms,
+            gen_tokens, max_tokens, gen_ms, think ? 1 : 0, ms(start, clock::now()), outcome);
+#ifdef __ANDROID__
+        __android_log_write(ANDROID_LOG_INFO, "LLM_DIAG", line);
+#else
+        std::fprintf(stderr, "LLM_DIAG %s\n", line);
+#endif
+    }
+};
+}  // namespace
+
 extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         JNIEnv * env, jobject, jlong handle, jbyteArray text_bytes, jint max_tokens, jint threads) {
+    CallDiag diag;
     try {
         auto * runtime = reinterpret_cast<Runtime *>(handle);
         auto * model = runtime ? runtime->model.get() : nullptr;
@@ -181,6 +223,8 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         if (input_count <= 0) throw std::runtime_error("input tokenize");
         // ceil(1.3 * input) + EOS, with a small floor for one-word replies.
         max_tokens = generation_budget(input_count, max_tokens);
+        diag.prompt_tokens = count; diag.input_tokens = input_count; diag.max_tokens = max_tokens;
+        diag.prefix_tokens = static_cast<int>(stable);
         constexpr int context_size = 2048;
         if (count + max_tokens >= context_size) throw std::runtime_error("context limit");
         if (runtime->context && runtime->prefix != fixed) {
@@ -205,6 +249,8 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
             if (atomic_abort(runtime)) throw std::runtime_error("cancelled");
             if (llama_decode(ctx, llama_batch_get_one(data, size)) != 0) throw std::runtime_error("decode");
         };
+        diag.prefix_reused = !runtime->prefix.empty();
+        const auto prefill_start = CallDiag::clock::now();
         if (runtime->prefix.empty()) {
             for (int offset = 0; offset < static_cast<int>(stable); offset += 512)
                 decode(tokens.data() + offset, std::min(512, static_cast<int>(stable) - offset));
@@ -214,12 +260,15 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
             throw std::runtime_error("cache trim");
         for (int offset = static_cast<int>(stable); offset < count; offset += 512)
             decode(tokens.data() + offset, std::min(512, count - offset));
+        const auto gen_start = CallDiag::clock::now();
+        diag.prefill_ms = CallDiag::ms(prefill_start, gen_start);
         Sampler sampler(llama_sampler_init_greedy());
         if (!sampler) throw std::runtime_error("sampler");
         std::string output;
         bool finished = false;
         for (int i = 0; i < max_tokens; ++i) {
             if (atomic_abort(runtime)) {
+                diag.outcome = "cancelled";
                 fail(env, "java/lang/InterruptedException", "LLM cancelled");
                 return nullptr;
             }
@@ -233,9 +282,13 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
             }
             if (length < 0) throw std::runtime_error("piece");
             output.append(piece.data(), static_cast<size_t>(length));
+            ++diag.gen_tokens;
+            diag.gen_ms = CallDiag::ms(gen_start, CallDiag::clock::now());
+            diag.think = output.find("<think>") != std::string::npos || output.find("</think>") != std::string::npos;
             if (output.size() > 8192) throw std::runtime_error("output limit");
             decode(&token, 1);
         }
+        diag.gen_ms = CallDiag::ms(gen_start, CallDiag::clock::now());
         // A truncated answer is a runtime failure, not a completed LLM run.
         if (!finished) throw std::runtime_error("generation limit");
         const auto result = env->NewByteArray(static_cast<jsize>(output.size()));
@@ -245,7 +298,12 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         if (!llama_memory_seq_rm(llama_get_memory(ctx), 0, static_cast<llama_pos>(stable), -1))
             throw std::runtime_error("cache trim");
         invocation.committed = true;
+        diag.outcome = "ok";
         return result;
+    } catch (const std::exception & e) {
+        diag.error(e.what());
+        fail(env, "java/lang/IllegalStateException", "LLM inference failed");
+        return nullptr;
     } catch (...) {
         // runInterruptible will rethrow coroutine cancellation after the blocking call unwinds.
         fail(env, "java/lang/IllegalStateException", "LLM inference failed");

@@ -124,6 +124,7 @@ dependencies {
     implementation(project(":core:audio"))
     implementation(project(":core:pipeline"))
     implementation(project(":core:export"))
+    implementation(project(":core:history"))
     implementation(project(":engine:asr"))
     implementation(project(":engine:diarization"))
     implementation(project(":engine:alignment"))
@@ -147,6 +148,7 @@ dependencies {
     debugImplementation(libs.androidx.lifecycle.viewmodel.compose)
 
     testImplementation(libs.junit)
+    testImplementation(libs.kotlinx.coroutines.test)
 
     // UI tests in app/src/androidTest (front); run by emulator CI via connectedDebugAndroidTest.
     androidTestImplementation(platform(libs.compose.bom))

@@ -8,6 +8,7 @@ import core.audio.AudioPreparer
 import core.contracts.TranscriptExporter
 import core.contracts.TranscriptionPipeline
 import core.export.ContentResolverTranscriptExporter
+import core.history.HistoryRepository
 import core.pipeline.AssetModelStore
 import core.pipeline.DefaultTranscriptionPipeline
 import kotlinx.coroutines.CoroutineScope
@@ -30,19 +31,29 @@ class AppGraph private constructor(context: Context) {
     private val modelStore = AssetModelStore(context)
 
     // Copy failures are not lost: the job's own ensureModel() call raises them as Failed(...).
-    private val modelsCopied = CoroutineScope(SupervisorJob() + Dispatchers.IO).launch {
+    private val io = CoroutineScope(SupervisorJob() + Dispatchers.IO)
+
+    private val modelsCopied = io.launch {
         for (name in listOf(engines.diarization, engines.asr, engines.postprocessor).flatMap { it.models }) {
             runCatching { modelStore.ensureModel(name) }
         }
     }
 
-    val pipeline: TranscriptionPipeline = DefaultTranscriptionPipeline(
-        prepareAudio = AudioPreparer(context)::prepare,
-        jobsDir = File(context.filesDir, "jobs"), // AudioPreparer writes filesDir/jobs/<jobId>/
-        engines = engines,
-        modelStore = modelStore,
-        dispatcher = Dispatchers.Default,
-        awaitModels = { modelsCopied.join() },
+    /** Finished transcripts; Completed jobs of [pipeline] are saved automatically. */
+    val history = HistoryRepository(File(context.filesDir, "history"))
+
+    val pipeline: TranscriptionPipeline = HistorySavingPipeline(
+        delegate = DefaultTranscriptionPipeline(
+            prepareAudio = AudioPreparer(context)::prepare,
+            jobsDir = File(context.filesDir, "jobs"), // AudioPreparer writes filesDir/jobs/<jobId>/
+            engines = engines,
+            modelStore = modelStore,
+            dispatcher = Dispatchers.Default,
+            awaitModels = { modelsCopied.join() },
+        ),
+        history = history,
+        sourceName = { uri -> displayName(context, uri) },
+        scope = io,
     )
 
     val exporter: TranscriptExporter = ContentResolverTranscriptExporter(context.contentResolver)

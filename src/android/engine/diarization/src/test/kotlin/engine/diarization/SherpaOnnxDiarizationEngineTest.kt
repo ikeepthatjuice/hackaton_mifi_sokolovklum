@@ -108,6 +108,24 @@ class SherpaOnnxDiarizationEngineTest {
     }
 
     @Test
+    fun `test when all clusters under 2s they are not collapsed into single speaker`() {
+        val engine = SherpaOnnxDiarizationEngine(
+            config = SherpaOnnxDiarizationConfig(minSpeakerTotalDurationMs = 2000L)
+        )
+        val segments = listOf(
+            SherpaOnnxSegment(clusterId = 10, startMs = 500, endMs = 1500),
+            SherpaOnnxSegment(clusterId = 20, startMs = 2000, endMs = 3200)
+        )
+
+        val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 5000L)
+
+        val distinctSpeakers = turns.map { it.speakerId }.distinct()
+        assertEquals(2, distinctSpeakers.size)
+        assertEquals("speaker_1", distinctSpeakers[0])
+        assertEquals("speaker_2", distinctSpeakers[1])
+    }
+
+    @Test
     fun `test pauses and silence do not shift time coordinates`() = runBlocking {
         val segments = listOf(
             SherpaOnnxSegment(clusterId = 1, startMs = 1000, endMs = 2000),

@@ -1,5 +1,6 @@
 package app.frontdebug
 
+import android.accessibilityservice.AccessibilityServiceInfo
 import android.content.ContentValues
 import android.content.pm.ActivityInfo
 import android.content.res.Configuration
@@ -13,7 +14,9 @@ import androidx.compose.ui.test.hasText
 import androidx.compose.ui.test.isEnabled
 import androidx.compose.ui.test.junit4.createEmptyComposeRule
 import androidx.compose.ui.test.onAllNodesWithText
+import androidx.compose.ui.test.onRoot
 import androidx.compose.ui.test.performClick
+import androidx.compose.ui.test.printToString
 import androidx.test.core.app.ActivityScenario
 import androidx.test.ext.junit.runners.AndroidJUnit4
 import androidx.test.filters.SdkSuppress
@@ -35,7 +38,15 @@ class FrontFlowTest {
     @get:Rule val compose = createEmptyComposeRule()
     private val uiTimeoutMs = 30_000L
     private val instrumentation = InstrumentationRegistry.getInstrumentation()
-    private val automation get() = instrumentation.uiAutomation
+    // Subscribe before launch so initial accessibility/window events are observed on a cold device.
+    private val automation = instrumentation.uiAutomation.also { ui ->
+        // Request window events and resource IDs explicitly instead of relying on a warm device.
+        ui.serviceInfo = ui.serviceInfo.apply {
+            flags = flags or AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS or
+                AccessibilityServiceInfo.FLAG_REPORT_VIEW_IDS
+        }
+    }
+    private var lastObservedWindow = "not observed"
 
     @Test fun safImportRotationResultAndJsonExport() {
         val resolver = instrumentation.targetContext.contentResolver
@@ -156,17 +167,25 @@ class FrontFlowTest {
         }
     }
 
+    private fun activeRoot(): AccessibilityNodeInfo? {
+        val windows = automation.windows
+        val root = windows.firstOrNull { it.isFocused }?.root ?: automation.rootInActiveWindow
+        lastObservedWindow = "${root?.packageName}, window=${root?.windowId}; windows=" +
+            windows.joinToString { "${it.id}:focused=${it.isFocused}:active=${it.isActive}" }
+        return root
+    }
+
     private fun isAppWindowActive(): Boolean =
-        automation.rootInActiveWindow?.packageName?.toString() == instrumentation.targetContext.packageName
+        activeRoot()?.packageName?.toString() == instrumentation.targetContext.packageName
 
     private fun waitAppText(text: String) = awaitCondition("active app window and text: $text") {
-        isAppWindowActive() && compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+        isAppWindowActive() && compose.onAllNodesWithText(text).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
     }
 
     private fun clickAppText(text: String) {
         val matcher = hasText(text) and isEnabled()
         awaitCondition("enabled app control: $text") {
-            isAppWindowActive() && compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+            isAppWindowActive() && compose.onAllNodes(matcher).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
         }
         compose.onNode(matcher).performClick()
     }
@@ -174,7 +193,7 @@ class FrontFlowTest {
     private fun clickAudioChooser() {
         val matcher = (hasText("Выбрать аудио") or hasText("Выбрать другой файл")) and isEnabled()
         awaitCondition("audio chooser after cancellation/reset") {
-            isAppWindowActive() && compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+            isAppWindowActive() && compose.onAllNodes(matcher).fetchSemanticsNodes(atLeastOneRootRequired = false).isNotEmpty()
         }
         compose.onNode(matcher).performClick()
     }
@@ -193,14 +212,18 @@ class FrontFlowTest {
             for (index in 0 until node.childCount) visit(node.getChild(index))?.let { return it }
             return null
         }
-        return visit(automation.rootInActiveWindow)
+        return visit(activeRoot())
     }
     private fun awaitCondition(description: String, condition: () -> Boolean) {
         try {
             compose.waitUntil(timeoutMillis = uiTimeoutMs, condition = condition)
         } catch (e: ComposeTimeoutException) {
             runCatching { capture("front-test-timeout") }
-            throw AssertionError("Timed out waiting for $description after ${uiTimeoutMs}ms", e)
+            val tree = runCatching { compose.onRoot().printToString(maxDepth = 6) }
+                .getOrElse { "Compose tree unavailable: ${it.javaClass.simpleName}" }.take(2_000)
+            throw AssertionError(
+                "Timed out waiting for $description after ${uiTimeoutMs}ms; active window=$lastObservedWindow\n$tree", e,
+            )
         }
     }
 

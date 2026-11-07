@@ -100,6 +100,50 @@ class WhisperAsrEngineTest {
     }
 
     @Test
+    fun `test synthetic tokens with overlaps special tokens inverted times and out of bounds`() {
+        val engine = WhisperAsrEngine()
+        val durationMs = 5000L
+
+        val syntheticTokens = listOf(
+            WhisperToken("<|startoftranscript|>", startMs = 0, endMs = 100),
+            WhisperToken("<|ru|>", startMs = 100, endMs = 200),
+            WhisperToken(" При", startMs = 300, endMs = 600),
+            WhisperToken("вет", startMs = 600, endMs = 900),
+            WhisperToken("[_BEG_]", startMs = 900, endMs = 950),
+            // Overlapping word with previous end
+            WhisperToken(" мир", startMs = 800, endMs = 1200),
+            // Inverted timestamps (t1 < t0)
+            WhisperToken(" тест", startMs = 2000, endMs = 1500),
+            // Overlapping again
+            WhisperToken(" еще", startMs = 1800, endMs = 2500),
+            // Out of bounds (past durationMs)
+            WhisperToken(" поздно", startMs = 5500, endMs = 6000),
+            WhisperToken("<|endoftranscript|>", startMs = 6000, endMs = 6100)
+        )
+
+        val words = engine.aggregateTokensToWords(syntheticTokens, maxDurationMs = durationMs)
+
+        assertTrue("Words must not be empty", words.isNotEmpty())
+
+        var prevEnd = 0L
+        for (w in words) {
+            assertTrue("Text must not contain special tokens: ${w.text}", !w.text.contains("<|") && !w.text.contains("[_"))
+            assertTrue("startMs (${w.startMs}) must be < endMs (${w.endMs})", w.startMs < w.endMs)
+            assertTrue("startMs (${w.startMs}) must be >= 0", w.startMs >= 0L)
+            assertTrue("endMs (${w.endMs}) must be <= durationMs ($durationMs)", w.endMs <= durationMs)
+            assertTrue("Timestamps must be non-decreasing: startMs ${w.startMs} >= prevEnd $prevEnd", w.startMs >= prevEnd)
+            prevEnd = w.endMs
+        }
+
+        assertEquals("Привет", words[0].text)
+        assertEquals("мир", words[1].text)
+        assertEquals("тест", words[2].text)
+        assertEquals("еще", words[3].text)
+        // Word 'поздно' must be dropped because start >= durationMs
+        assertTrue("Tokens past durationMs must be dropped", words.none { it.text == "поздно" })
+    }
+
+    @Test
     fun `test empty tokens produce empty list without crashing`() = runBlocking {
         val engine = WhisperAsrEngine(
             mockTokenProvider = { emptyList() }

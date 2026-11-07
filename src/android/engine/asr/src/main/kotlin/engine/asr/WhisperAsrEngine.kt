@@ -164,7 +164,7 @@ class WhisperAsrEngine(
     internal fun aggregateTokensToWords(tokens: List<WhisperToken>, maxDurationMs: Long): List<AsrWord> {
         if (tokens.isEmpty()) return emptyList()
 
-        val words = mutableListOf<AsrWord>()
+        val rawWords = mutableListOf<AsrWord>()
         val currentWordChars = StringBuilder()
         var currentWordStartMs = -1L
         var currentWordEndMs = -1L
@@ -173,9 +173,7 @@ class WhisperAsrEngine(
             if (currentWordChars.isNotBlank() && currentWordStartMs >= 0) {
                 val cleanedText = currentWordChars.toString().trim()
                 if (cleanedText.isNotEmpty()) {
-                    val safeStart = currentWordStartMs.coerceAtLeast(0L)
-                    val safeEnd = currentWordEndMs.coerceAtLeast(safeStart + 1L).coerceAtMost(maxDurationMs)
-                    words.add(AsrWord(cleanedText, safeStart, safeEnd))
+                    rawWords.add(AsrWord(cleanedText, currentWordStartMs, currentWordEndMs))
                 }
             }
             currentWordChars.clear()
@@ -187,14 +185,21 @@ class WhisperAsrEngine(
             val rawTokenText = token.text
             if (rawTokenText.isEmpty()) continue
 
+            // 1. Пропускать служебные токены вида [_...] / <|...|>
+            val trimmed = rawTokenText.trim()
+            if (trimmed.startsWith("<|") || trimmed.startsWith("[_")) {
+                continue
+            }
+
+            // 2. Склеивать подслова в слова: новый AsrWord начинается с токена, у которого текст начинается с пробела
             val startsWithSpace = rawTokenText.startsWith(" ") ||
                     rawTokenText.startsWith("\u0120") ||
-                    rawTokenText.startsWith(" ")
+                    rawTokenText.startsWith("\u2581")
 
             val tokenContent = rawTokenText
                 .replace(" ", "")
                 .replace("\u0120", "")
-                .replace(" ", "")
+                .replace("\u2581", "")
 
             if (startsWithSpace && currentWordChars.isNotEmpty()) {
                 flushWord()
@@ -202,15 +207,38 @@ class WhisperAsrEngine(
 
             if (tokenContent.isNotEmpty()) {
                 if (currentWordStartMs < 0) {
-                    currentWordStartMs = token.startMs
+                    currentWordStartMs = token.startMs // t0 слова = t0 первого токена
                 }
                 currentWordChars.append(tokenContent)
-                currentWordEndMs = token.endMs
+                currentWordEndMs = token.endMs // t1 = t1 последнего
             }
         }
 
         flushWord()
-        return words.filter { it.startMs < it.endMs && it.text.isNotBlank() }
+
+        // 3. После склейки — нормализация по порядку:
+        //    start = max(start, prevEnd); end = max(end, start + 1); end = min(end, durationMs);
+        //    если start >= durationMs — слово отбросить.
+        val normalizedWords = mutableListOf<AsrWord>()
+        var prevEnd = 0L
+
+        for (word in rawWords) {
+            val start = maxOf(word.startMs, prevEnd)
+            var end = maxOf(word.endMs, start + 1L)
+            end = minOf(end, maxDurationMs)
+
+            if (start >= maxDurationMs) {
+                continue
+            }
+            if (end <= start) {
+                continue
+            }
+
+            normalizedWords.add(AsrWord(word.text, start, end))
+            prevEnd = end
+        }
+
+        return normalizedWords
     }
 }
 

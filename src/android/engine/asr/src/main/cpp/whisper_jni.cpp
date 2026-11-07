@@ -73,6 +73,7 @@ Java_engine_asr_WhisperNative_transcribePcm(
     params.language = lang_chars;
     params.n_threads = threads > 0 ? threads : 4;
     params.token_timestamps = (enable_token_timestamps == JNI_TRUE);
+    params.split_on_word = true;
     params.thold_pt = 0.01f;
     params.thold_ptsum = 0.01f;
     params.max_len = 0;
@@ -101,6 +102,7 @@ Java_engine_asr_WhisperNative_transcribePcm(
 
     std::vector<jobject> token_objects;
     const int n_segments = whisper_full_n_segments(ctx);
+    const whisper_token eot_id = whisper_token_eot(ctx);
 
     for (int i = 0; i < n_segments; ++i) {
         const int n_tokens = whisper_full_n_tokens(ctx, i);
@@ -109,8 +111,20 @@ Java_engine_asr_WhisperNative_transcribePcm(
 
         for (int j = 0; j < n_tokens; ++j) {
             whisper_token_data token_data = whisper_full_get_token_data(ctx, i, j);
+            if (token_data.id >= eot_id) {
+                continue;
+            }
+
             const char *text = whisper_token_to_str(ctx, token_data.id);
             if (text == nullptr || text[0] == '\0') {
+                continue;
+            }
+
+            // Skip special tokens format <|...|> or [_...]
+            if (text[0] == '<' && text[1] == '|') {
+                continue;
+            }
+            if (text[0] == '[' && text[1] == '_') {
                 continue;
             }
 

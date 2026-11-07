@@ -21,6 +21,7 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.withTimeoutOrNull
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -101,12 +102,19 @@ class DefaultTranscriptionPipeline(
             val utterances = engineCall { engines.aligner.align(words, turns) }
 
             state.value = PipelineState.Running(Stage.POSTPROCESS, null)
-            val processed = stage(engines.postprocessor) { it.process(utterances) }
+            // Whole stage budget includes model preparation/load, not just decoding.
+            // Only our deadline becomes rawText + warning; user cancellation still propagates.
+            val budgetMs = (audio.durationMs.coerceAtLeast(0).toDouble() * 0.30).toLong().coerceAtLeast(1L)
+            val withinBudget = withTimeoutOrNull(budgetMs) {
+                stage(engines.postprocessor) { it.process(utterances) }
+            }
+            val processed = withinBudget ?: utterances.map { it.copy(displayText = it.rawText) }
+            val warnings = if (withinBudget == null) listOf("LLM_BUDGET_EXCEEDED") else emptyList()
 
             // A cancel requested during a non-suspending step still wins over the result.
             currentCoroutineContext().ensureActive()
             deleteJobDir(jobId)
-            state.value = PipelineState.Completed(TranscriptResult(jobId, audio.durationMs, processed))
+            state.value = PipelineState.Completed(TranscriptResult(jobId, audio.durationMs, processed, warnings))
         } catch (e: CancellationException) {
             throw e // invokeOnCompletion sets Cancelled and cleans up
         } catch (e: Throwable) {

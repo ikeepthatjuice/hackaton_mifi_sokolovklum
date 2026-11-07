@@ -8,6 +8,7 @@ import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
+import kotlinx.coroutines.test.runCurrent
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
@@ -70,7 +71,7 @@ class DefaultTranscriptionPipelineTest {
             val p = pipeline()
             world.hangAt = stage
             val id = p.start("content://synthetic/1")
-            advanceUntilIdle()
+            runCurrent() // do not advance into the POSTPROCESS budget before testing explicit cancel
             assertEquals(PipelineState.Running(stage, null), p.observe(id).value)
             assertTrue(jobDir(id).exists())
 
@@ -226,5 +227,53 @@ class DefaultTranscriptionPipelineTest {
         advanceUntilIdle()
 
         assertEquals(PipelineState.Failed(PipelineError.OUT_OF_MEMORY), p.observe(id).value)
+    }
+
+    @Test
+    fun postprocessDeadlineCompletesWithRawTextAndWarningAndReleasesModel() = runTest {
+        val p = pipeline()
+        world.hangAt = Stage.POSTPROCESS
+        val id = p.start("content://synthetic/deadline")
+        advanceUntilIdle()
+        val completed = p.observe(id).value as PipelineState.Completed
+        assertEquals(1500L, testScheduler.currentTime) // 30% of 5000 ms audio
+        assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
+        assertEquals(listOf("LLM_BUDGET_EXCEEDED"), completed.result.warnings)
+        assertEquals(0, world.loadedNow)
+        assertFalse(jobDir(id).exists())
+    }
+
+    @Test
+    fun postprocessDeadlineAlsoBoundsModelPreparation() = runTest {
+        val p = pipeline()
+        models.hangName = "llm.gguf"
+        val id = p.start("content://synthetic/load-deadline")
+        advanceUntilIdle()
+        val completed = p.observe(id).value as PipelineState.Completed
+        assertEquals(1500L, testScheduler.currentTime)
+        assertEquals(listOf("LLM_BUDGET_EXCEEDED"), completed.result.warnings)
+        assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
+        assertEquals(listOf("diarization", "asr"), world.loadOrder)
+        assertEquals(0, world.loadedNow)
+    }
+
+    @Test
+    fun fastPostprocessDoesNotClaimDeadlineWarning() = runTest {
+        val p = pipeline()
+        val id = p.start("content://synthetic/fast")
+        advanceUntilIdle()
+        val completed = p.observe(id).value as PipelineState.Completed
+        assertTrue(completed.result.warnings.isEmpty())
+        assertEquals(0L, testScheduler.currentTime)
+    }
+
+    @Test
+    fun engineInternalPostprocessCancellationIsNotOurBudgetTimeout() = runTest {
+        val p = pipeline()
+        world.failAt = Stage.POSTPROCESS
+        world.engineFailure = java.util.concurrent.CancellationException("synthetic internal cancel")
+        val id = p.start("content://synthetic/internal-cancel")
+        advanceUntilIdle()
+        assertEquals(PipelineState.Failed(PipelineError.ENGINE_FAILED), p.observe(id).value)
     }
 }

@@ -83,7 +83,9 @@ class FakePostprocessor(private val world: FakeWorld) : TranscriptPostprocessor,
 /** Returns a dummy file per model; can fail with a given PipelineFailure. */
 class FakeModelStore(private val dir: File) : ModelStore {
     var failure: PipelineFailure? = null
+    var hangName: String? = null
     override suspend fun ensureModel(name: String): File {
+        if (name == hangName) awaitCancellation()
         failure?.let { throw it }
         return File(dir, name).apply { writeText(name) }
     }

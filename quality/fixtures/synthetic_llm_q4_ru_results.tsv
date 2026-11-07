@@ -1,0 +1,40 @@
+REAL	RU	1	ACCEPT	NONE	821	да	да	да
+REAL	RU	2	ACCEPT	NONE	265	нет	нет	нет
+REAL	RU	3	ACCEPT	NONE	304	да нет	да нет	да нет
+REAL	RU	4	ACCEPT	NONE	305	нет не надо	нет не надо	нет не надо
+REAL	RU	5	ACCEPT	NONE	465	иван петров завтра придёт в 10	Иван Петров завтра придёт в 10	Иван Петров завтра придёт в 10
+REAL	RU	6	ACCEPT	NONE	501	анна сергеевна передаст 12 папок	Анна Сергеевна передаст 12 папок	Анна Сергеевна передаст 12 папок
+REAL	RU	7	FALLBACK	WORDS	403	илья и ярик не меняют срок	Иля и Ярик не меняют срок	илья и ярик не меняют срок
+REAL	RU	8	ACCEPT	NONE	498	семён и алёна встретятся в саранске	Семён и Алёна встретятся в Саранске	Семён и Алёна встретятся в Саранске
+REAL	RU	9	ACCEPT	NONE	476	роман маратович позвонит юле	роман маратович позвонит юле	роман маратович позвонит юле
+REAL	RU	10	ACCEPT	NONE	458	встреча 7 ноября в 15 часов	встреча 7 ноября в 15 часов	встреча 7 ноября в 15 часов
+REAL	RU	11	ACCEPT	NONE	568	стоимость 12,5 рублей скидка 10%	стоимость 12,5 рублей скидка 10%	стоимость 12,5 рублей скидка 10%
+REAL	RU	12	FALLBACK	WORDS	476	код 007 номер 42 не меняем	Код 007 Номер 42 Нет менять	код 007 номер 42 не меняем
+REAL	RU	13	FALLBACK	WORDS	522	я не согласен нет мы не переносим встречу	Нет, я не согласен. Нет мы не переносим встречу	я не согласен нет мы не переносим встречу
+REAL	RU	14	FALLBACK	WORDS	534	санёк принесёт 3 договора а сю́бик 2	Санёк принесёт 3 договора, а субик 2.	санёк принесёт 3 договора а сю́бик 2
+REAL	RU	15	ACCEPT	NONE	532	нам нужно двадцать пять листов и не тридцать	нам нужно двадцать пять листов и не тридцать	нам нужно двадцать пять листов и не тридцать
+REAL	RU	16	ACCEPT	NONE	513	адрес улица лесная дом 12 корпус 2	адрес улица лесная дом 12 корпус 2	адрес улица лесная дом 12 корпус 2
+REAL	EN	17	FALLBACK	WORDS	285	yes	Да Нет	yes
+REAL	EN	18	ACCEPT	NONE	388	anna will bring 12 folders tomorrow	Anna will bring 12 folders tomorrow.	Anna will bring 12 folders tomorrow.
+CORRUPT_CONTROL	1	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	2	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	3	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	4	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	5	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	6	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	7	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	8	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	9	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	10	NUMBERS	RAW_RESTORED
+CORRUPT_CONTROL	11	NUMBERS	RAW_RESTORED
+CORRUPT_CONTROL	12	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	13	WORDS	RAW_RESTORED
+CORRUPT_CONTROL	14	NUMBERS	RAW_RESTORED
+CORRUPT_CONTROL	15	WORDS	RAW_RESTORED
+FORMAT_CONTROL	1	ACCEPTED
+FORMAT_CONTROL	2	ACCEPTED
+FORMAT_CONTROL	3	ACCEPTED
+FORMAT_CONTROL	4	ACCEPTED
+FORMAT_CONTROL	5	ACCEPTED
+FORMAT_CONTROL	6	ACCEPTED
+SUMMARY	realRU=16	realEN=2	corruptControls=15	formatControls=6	errors=0

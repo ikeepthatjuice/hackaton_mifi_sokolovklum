@@ -51,6 +51,20 @@ class NativeSmokeTest {
     }
 
     companion object {
+        // Q4 is the current default; do not silently verify a different model.
         private const val MODEL_SHA="2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9"
+    }
+
+    @Test fun pipelineOwnershipClosesTheRealRuntime() = runBlocking {
+        val path=System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for native lifecycle",!path.isNullOrBlank())
+        val runtime=LlamaCppTextGenerator(File(path!!),MODEL_SHA)
+        val processor=LocalTranscriptPostprocessor(runtime)
+        try {
+            withTimeout(120_000) {processor.process(listOf(Utterance("synthetic_close","speaker_1",0,1000,"да","да")))}
+            processor.close();processor.close()
+            try {runtime.generate("нет",256);fail("closed runtime")}
+            catch(e:LlmException) {assertEquals(LlmFailure.CLOSED,e.code)}
+        } finally {processor.close()}
     }
 }

@@ -40,6 +40,28 @@ class AssetModelStoreTest {
     }
 
     @Test
+    fun sameSizeCacheWithOtherShaIsRecopied(): Unit = runBlocking {
+        // Simulates an app update: cached file of the same size, recorded sha from older weights.
+        modelsDir.mkdirs()
+        File(modelsDir, "tiny.dat").writeText("x".repeat(4080))
+        File(modelsDir, "tiny.dat.sha256").writeText("0".repeat(64))
+
+        val file = store.ensureModel("tiny.dat")
+        assertEquals("synthetic model weights\n".repeat(170), file.readText())
+        assertEquals(
+            "511eef4b3d07ad2dace2f30a6f7f5417161b342b3d0f7a8453ad69e90adf6004",
+            File(modelsDir, "tiny.dat.sha256").readText(),
+        )
+    }
+
+    @Test
+    fun sameSizeCacheWithoutRecordedShaIsRecopied(): Unit = runBlocking {
+        modelsDir.mkdirs()
+        File(modelsDir, "tiny.dat").writeText("x".repeat(4080))
+        assertEquals("synthetic model weights\n".repeat(170), store.ensureModel("tiny.dat").readText())
+    }
+
+    @Test
     fun missingAssetIsModelMissing(): Unit = runBlocking {
         expectFailure(PipelineError.MODEL_MISSING) { store.ensureModel("absent.dat") }
     }

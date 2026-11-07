@@ -31,6 +31,18 @@ class WerTests(unittest.TestCase):
         self.assertEqual(c['S'] + c['D'] + c['I'], 3)
         self.assertEqual(c['N'], 4)
 
+    def test_yo_is_e_on_both_sides(self):
+        self.assertEqual(counts('ещё всё', 'еще все')['WER'], 0.0)
+        self.assertEqual(counts('еще все', 'ещё всё')['WER'], 0.0)
+
+    def test_digits_are_not_rewritten_but_can_be_dropped(self):
+        c = counts('в 2015 году', 'в две тысячи пятнадцатом году')
+        self.assertEqual((c['N'], c['S'] + c['D'] + c['I']), (3, 3))
+        c = counts('в 2015 году', 'в две тысячи пятнадцатом году', drop_digits=True)
+        self.assertEqual(c['N'], 2)  # "2015" dropped from the reference
+        c = counts('нужно 12 папок', 'нужно 12 папок 3', drop_digits=True)
+        self.assertEqual((c['N'], c['WER']), (2, 0.0))  # tokens with digits dropped on both sides
+
     def test_empty_reference(self):
         self.assertEqual(counts('', '')['WER'], 0.0)
         self.assertEqual(counts('', 'лишнее')['WER'], float('inf'))

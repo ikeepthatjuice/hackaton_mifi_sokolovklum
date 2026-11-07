@@ -1,9 +1,11 @@
 """WER = (S + D + I) / N over words, standard library only.
 
-Normalization: NFC, lower case, ё → е, punctuation → space, whitespace collapsed.
+Normalization (same for reference and hypothesis): NFC, lower case, ё → е, punctuation → space,
+whitespace collapsed. Numbers are not rewritten as words; --no-digits instead drops every token
+that contains a digit from both sides before alignment.
 Prints counts only: never reference or hypothesis text.
 
-    python3 quality/wer.py REF HYP      # each: plain text file, or export JSON {"transcript":[{"text":...}]}
+    python3 quality/wer.py [--no-digits] REF HYP   # each: plain text file, or export JSON {"transcript":[{"text":...}]}
 """
 import json
 import sys
@@ -15,9 +17,11 @@ def normalize(text):
     return ' '.join(''.join(c if unicodedata.category(c)[0] in 'LNM' else ' ' for c in text).split())
 
 
-def counts(reference, hypothesis):
+def counts(reference, hypothesis, drop_digits=False):
     """Word-level Levenshtein: dict(S, D, I, N, WER). Ties prefer substitution, then deletion."""
     ref, hyp = normalize(reference).split(), normalize(hypothesis).split()
+    if drop_digits:
+        ref, hyp = ([w for w in side if not any(c.isdigit() for c in w)] for side in (ref, hyp))
     # row[j] = (cost, S, D, I) for ref[:i] vs hyp[:j]
     row = [(j, 0, 0, j) for j in range(len(hyp) + 1)]
     for i, r in enumerate(ref, 1):
@@ -45,10 +49,12 @@ def read_text(path):
 
 
 def main(argv):
-    if len(argv) != 3:
+    drop_digits = '--no-digits' in argv
+    paths = [a for a in argv[1:] if a != '--no-digits']
+    if len(paths) != 2:
         print(__doc__.strip(), file=sys.stderr)
         return 2
-    c = counts(read_text(argv[1]), read_text(argv[2]))
+    c = counts(read_text(paths[0]), read_text(paths[1]), drop_digits)
     print(f"S={c['S']} D={c['D']} I={c['I']} N={c['N']} WER={c['WER']:.4f}")
     return 0
 

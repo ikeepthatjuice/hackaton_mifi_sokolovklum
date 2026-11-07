@@ -71,7 +71,7 @@ fun PipelineRoute(
 }
 
 internal fun stageLabel(stage: Stage): String = when (stage) {
-    Stage.IMPORT -> "Импорт аудио"
+    Stage.IMPORT -> "Подготовка моделей…"
     Stage.DECODE -> "Подготовка аудио"
     Stage.DIARIZATION -> "Определение говорящих"
     Stage.ASR -> "Распознавание речи"

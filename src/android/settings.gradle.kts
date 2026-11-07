@@ -22,4 +22,5 @@ include(":core:audio")
 include(":core:pipeline")
 // Front modules; addition agreed with back in B2/#5.
 include(":feature:import", ":feature:transcript")
-// engine/* и остальные core/* модули подключаются PR владельцев (согласование с back).
+include(":engine:llm")
+// Остальные engine/* подключаются PR владельцев.

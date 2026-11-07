@@ -16,6 +16,11 @@ ABIS=(arm64-v8a x86_64) # must match abiFilters in the Gradle modules
 LIBS=(libsherpa-onnx-c-api.so libonnxruntime.so)
 
 ROOT=$(git rev-parse --show-toplevel)
+# LLM fetch is explicit preparation, shared by CI and emulator jobs.
+# Run before the sherpa cache short-circuit so a warm cache still fetches llama.cpp.
+if [ -f "$ROOT/src/android/engine/llm/fetch-runtime.sh" ]; then
+  bash "$ROOT/src/android/engine/llm/fetch-runtime.sh"
+fi
 DEST="$ROOT/external/sherpa-onnx-android"
 STAMP="$DEST/.version"
 

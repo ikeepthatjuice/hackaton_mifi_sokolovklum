@@ -98,6 +98,29 @@ class FullCycleTest {
         }
     }
 
+    /**
+     * `-e class ...FullCycleTest#diarizationSweep -e sweep 1 -e audio <file>`: diarization alone for every
+     * embedding model × threshold (0.75/0.85/0.95). Logs speakers, turns and time only.
+     */
+    @Test
+    fun diarizationSweep(): Unit = runBlocking {
+        assumeTrue("needs -PrealEngines", BuildConfig.REAL_ENGINES)
+        val args = InstrumentationRegistry.getArguments()
+        assumeTrue("needs -e sweep 1", args.getString("sweep") == "1")
+        val target = InstrumentationRegistry.getInstrumentation().targetContext
+        val audio = File(target.getExternalFilesDir(null), requireNotNull(args.getString("audio")) { "needs -e audio" })
+        val store = AssetModelStore(target)
+        val input = AudioPreparer(target).prepare(Uri.fromFile(audio).toString(), jobId = "sweep")
+        for ((name, embedding) in EMBEDDINGS) for (threshold in listOf(0.75f, 0.85f, 0.95f)) {
+            val spec = diarizationSpec(embedding, threshold)
+            val started = SystemClock.elapsedRealtime()
+            val engine = spec.load(spec.models.map { store.ensureModel(it) })
+            val turns = try { engine.diarize(input) } finally { (engine as? AutoCloseable)?.close() }
+            Log.i(TAG, "sweep emb=$name threshold=$threshold speakers=${turns.map { it.speakerId }.distinct().size} " +
+                "turns=${turns.size} ms=${SystemClock.elapsedRealtime() - started} audio_ms=${input.durationMs}")
+        }
+    }
+
     private companion object {
         const val TAG = "FULL_CYCLE"
     }

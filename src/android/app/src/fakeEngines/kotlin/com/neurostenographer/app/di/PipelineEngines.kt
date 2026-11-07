@@ -25,6 +25,12 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
     postprocessor = EngineSpec(emptyList()) { SyntheticPostprocessor },
 )
 
+@Suppress("UNUSED_PARAMETER") // same signature as src/realEngines
+internal fun diarizationSpec(embedding: String = "", threshold: Float? = null): EngineSpec<DiarizationEngine> =
+    EngineSpec(emptyList()) { SyntheticDiarization }
+
+internal val EMBEDDINGS = emptyMap<String, String>()
+
 private const val STAGE_DELAY_MS = 700L // lets the UI show each Running stage
 
 /** Two speakers, half of the record each (one turn if the record is shorter than 2 ms). */

@@ -25,16 +25,7 @@ import kotlinx.coroutines.runBlocking
  */
 // asrLanguage: the app always uses "ru". GigaAM is Russian-only, so another language fails the job with ENGINE_FAILED.
 internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
-    diarization = EngineSpec(listOf(SEGMENTATION, EMBEDDING)) { (segmentation, embedding) ->
-        Diarization(
-            SherpaOnnxDiarizationEngine(
-                SherpaOnnxDiarizationConfig(
-                    segmentationModelPath = segmentation.path,
-                    embeddingModelPath = embedding.path,
-                ),
-            ),
-        )
-    },
+    diarization = diarizationSpec(),
     asr = EngineSpec(GIGAAM) { (encoder, decoder, joiner, tokens) ->
         // A clear job error instead of a Russian model transcribing another language.
         if (asrLanguage != "ru") throw PipelineFailure(PipelineError.ENGINE_FAILED, detail = "ASR supports only ru, got $asrLanguage")
@@ -46,8 +37,21 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
     },
 )
 
+/** Diarization with a given embedding model ([EMBEDDINGS] value) and clustering threshold (null = engine default). */
+internal fun diarizationSpec(embedding: String = EMBEDDING, threshold: Float? = null): EngineSpec<DiarizationEngine> =
+    EngineSpec(listOf(SEGMENTATION, embedding)) { (segmentation, emb) ->
+        val config = SherpaOnnxDiarizationConfig(segmentationModelPath = segmentation.path, embeddingModelPath = emb.path)
+        Diarization(SherpaOnnxDiarizationEngine(if (threshold == null) config else config.copy(clusteringThreshold = threshold)))
+    }
+
 private const val SEGMENTATION = "sherpa-onnx-pyannote-segmentation-3-0.onnx"
 private const val EMBEDDING = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+
+/** Embedding models in models/manifest.json, by short name (diarization sweep in FullCycleTest). */
+internal val EMBEDDINGS = mapOf(
+    "eres2net" to EMBEDDING,
+    "campplus" to "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
+)
 private const val LLM = "Qwen3-0.6B-Q4_K_M.gguf"
 private val GIGAAM = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt").map { "gigaam-v3-punct-$it" }
 

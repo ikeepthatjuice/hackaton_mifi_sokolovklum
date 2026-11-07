@@ -101,6 +101,9 @@ Java_engine_asr_WhisperNative_transcribePcm(
     params.language = lang_chars;
     params.n_threads = threads > 0 ? threads : 4;
     params.greedy.best_of = 1; // default 5: five decoders on every temperature fallback
+    params.temperature = 0.0f;
+    params.temperature_inc = 0.0f; // disable costly temperature fallback loop
+    params.no_context = true; // disable long context re-encoding for faster and hallucination-free decoding
     params.token_timestamps = (enable_token_timestamps == JNI_TRUE);
     params.split_on_word = true;
     params.thold_pt = 0.01f;

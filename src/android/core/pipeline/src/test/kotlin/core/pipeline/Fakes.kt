@@ -25,6 +25,9 @@ class FakeWorld(val jobsDir: File) {
     var onPostprocess: (() -> Unit)? = null
     var llmLoadDelayMs = 0L
     var generationDelayMs = 0L
+    var turns: List<SpeakerTurn>? = null // default: two speakers
+    var words: List<AsrWord>? = null
+    val postprocessCalls = mutableListOf<Int>() // utterances per call
     var llmCloseFailure: Throwable? = null
     var loadedNow = 0
     var maxLoaded = 0
@@ -53,7 +56,7 @@ class FakeWorld(val jobsDir: File) {
 class FakeDiarizationEngine(private val world: FakeWorld) : DiarizationEngine, AutoCloseable {
     override suspend fun diarize(input: AudioInput): List<SpeakerTurn> {
         world.gate(Stage.DIARIZATION)
-        return listOf(SpeakerTurn("speaker_1", 0, 2000), SpeakerTurn("speaker_2", 2000, 5000))
+        return world.turns ?: listOf(SpeakerTurn("speaker_1", 0, 2000), SpeakerTurn("speaker_2", 2000, 5000))
     }
     override fun close() { world.loadedNow-- }
 }
@@ -61,7 +64,7 @@ class FakeDiarizationEngine(private val world: FakeWorld) : DiarizationEngine, A
 class FakeAsrEngine(private val world: FakeWorld) : AsrEngine, AutoCloseable {
     override suspend fun transcribe(input: AudioInput): List<AsrWord> {
         world.gate(Stage.ASR)
-        return listOf(AsrWord("привет", 100, 900), AsrWord("здравствуйте", 2100, 3000))
+        return world.words ?: listOf(AsrWord("привет", 100, 900), AsrWord("здравствуйте", 2100, 3000))
     }
     override fun close() { world.loadedNow-- }
 }
@@ -77,6 +80,7 @@ class FakeAligner : TranscriptAligner {
 
 class FakePostprocessor(private val world: FakeWorld) : TranscriptPostprocessor, AutoCloseable {
     override suspend fun process(utterances: List<Utterance>): List<Utterance> {
+        world.postprocessCalls += utterances.size
         delay(world.generationDelayMs)
         world.gate(Stage.POSTPROCESS)
         world.onPostprocess?.invoke()

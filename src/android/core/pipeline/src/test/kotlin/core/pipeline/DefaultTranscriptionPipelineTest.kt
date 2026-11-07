@@ -1,8 +1,10 @@
 package core.pipeline
 
 import core.audio.AudioPreparationException
+import core.contracts.AsrWord
 import core.contracts.PipelineError
 import core.contracts.PipelineState
+import core.contracts.SpeakerTurn
 import core.contracts.Stage
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -266,6 +268,23 @@ class DefaultTranscriptionPipelineTest {
         assertEquals(listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст."), completed.result.warnings)
         assertEquals(0, world.loadedNow)
         assertFalse(jobDir(id).exists())
+    }
+
+    @Test
+    fun budgetTimeoutKeepsFinishedPortionsAndCountsThem() = runTest {
+        val p = pipeline()
+        // 6 utterances over 5000 ms audio → 1500 ms budget; 1000 ms per portion of 4 → only the first portion fits.
+        world.turns = (0 until 6).map { SpeakerTurn("speaker_${it % 2 + 1}", it * 800L, it * 800L + 800L) }
+        world.words = (0 until 6).map { AsrWord("слово$it", it * 800L + 100L, it * 800L + 500L) }
+        world.generationDelayMs = 1000L
+        val id = p.start("content://synthetic/portions")
+        advanceUntilIdle()
+
+        val result = (p.observe(id).value as PipelineState.Completed).result
+        assertEquals(listOf(4, 2), world.postprocessCalls)
+        assertEquals(listOf("Слово0.", "Слово1.", "Слово2.", "Слово3.", "слово4", "слово5"), result.utterances.map { it.displayText })
+        assertEquals(listOf("Пунктуация и регистр обработаны в 4 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), result.warnings)
+        assertEquals(0, world.loadedNow)
     }
 
     @Test

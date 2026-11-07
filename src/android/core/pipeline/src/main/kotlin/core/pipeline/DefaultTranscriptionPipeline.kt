@@ -7,6 +7,7 @@ import core.contracts.PipelineState
 import core.contracts.Stage
 import core.contracts.TranscriptResult
 import core.contracts.TranscriptionPipeline
+import core.contracts.Utterance
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -110,13 +111,21 @@ class DefaultTranscriptionPipeline(
             var warnings = emptyList<String>()
             val raw = { utterances.map { it.copy(displayText = it.rawText) } }
             val processed = try {
-                val withinBudget = stage(engines.postprocessor, suppressCloseErrors = false) { processor ->
-                    withTimeoutOrNull(budgetMs) { engineCall { processor.process(utterances) } }
+                // Portions of POSTPROCESS_PORTION utterances: on timeout the finished ones are kept, the rest stay raw.
+                val done = stage(engines.postprocessor, suppressCloseErrors = false) { processor ->
+                    val done = ArrayList<Utterance>(utterances.size)
+                    withTimeoutOrNull(budgetMs) {
+                        for (portion in utterances.chunked(POSTPROCESS_PORTION)) done += engineCall { processor.process(portion) }
+                    }
+                    done
                 }
-                if (withinBudget == null) {
-                    warnings = listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.")
-                    raw()
-                } else withinBudget
+                val total = utterances.size
+                warnings = when (done.size) {
+                    total -> emptyList()
+                    0 -> listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.")
+                    else -> listOf("Пунктуация и регистр обработаны в ${done.size} из $total реплик: исчерпан лимит времени LLM. Остальные — исходный текст.")
+                }
+                done + raw().drop(done.size)
             } catch (failure: Throwable) {
                 // User/job cancellation always wins; an engine-internal cancellation is an LLM error.
                 currentCoroutineContext().ensureActive()
@@ -177,6 +186,11 @@ class DefaultTranscriptionPipeline(
 
     private fun PipelineState.isFinal() =
         this is PipelineState.Completed || this is PipelineState.Failed || this is PipelineState.Cancelled
+
+    private companion object {
+        /** Utterances per LLM call: small enough to keep progress on timeout, large enough for batching. */
+        const val POSTPROCESS_PORTION = 4
+    }
 
     private fun deleteJobDir(jobId: String) {
         File(jobsDir, jobId).deleteRecursively()

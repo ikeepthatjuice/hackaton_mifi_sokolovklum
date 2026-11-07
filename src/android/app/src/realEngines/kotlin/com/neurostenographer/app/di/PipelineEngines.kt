@@ -7,6 +7,8 @@ import core.contracts.TranscriptPostprocessor
 import core.pipeline.EngineSpec
 import core.pipeline.PipelineEngines
 import engine.alignment.TranscriptAlignerImpl
+import engine.asr.GigaAmAsrEngine
+import engine.asr.GigaAmConfig
 import engine.asr.WhisperAsrConfig
 import engine.asr.WhisperAsrEngine
 import engine.diarization.SherpaOnnxDiarizationConfig
@@ -22,7 +24,8 @@ import kotlinx.coroutines.runBlocking
  * closes it right after: sherpa → whisper → LLM, one model in memory at a time.
  */
 // asrLanguage: the app always uses "ru"; FullCycleTest passes "en" for the English jfk.wav sample.
-internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
+// asrEngine: "whisper" (app default until the whisper-vs-GigaAM decision) or "gigaam" (Russian only).
+internal fun pipelineEngines(asrLanguage: String = "ru", asrEngine: String = "whisper") = PipelineEngines(
     diarization = EngineSpec(listOf(SEGMENTATION, EMBEDDING)) { (segmentation, embedding) ->
         Diarization(
             SherpaOnnxDiarizationEngine(
@@ -33,8 +36,14 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
             ),
         )
     },
-    asr = EngineSpec(listOf(WHISPER)) { (model) ->
-        Asr(WhisperAsrEngine(WhisperAsrConfig(modelPath = model.path, language = asrLanguage)))
+    asr = when (asrEngine) {
+        "whisper" -> EngineSpec(listOf(WHISPER)) { (model) ->
+            Asr(WhisperAsrEngine(WhisperAsrConfig(modelPath = model.path, language = asrLanguage)))
+        }
+        "gigaam" -> EngineSpec(GIGAAM) { (encoder, decoder, joiner, tokens) ->
+            GigaAm(GigaAmAsrEngine(GigaAmConfig(encoder.path, decoder.path, joiner.path, tokens.path, language = asrLanguage)))
+        }
+        else -> throw IllegalArgumentException("asrEngine must be whisper or gigaam")
     },
     aligner = TranscriptAlignerImpl(),
     postprocessor = EngineSpec(listOf(LLM)) { (model) ->
@@ -46,6 +55,7 @@ private const val SEGMENTATION = "sherpa-onnx-pyannote-segmentation-3-0.onnx"
 private const val EMBEDDING = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
 private const val WHISPER = "ggml-base.bin"
 private const val LLM = "Qwen3-0.6B-Q4_K_M.gguf"
+private val GIGAAM = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt").map { "gigaam-v3-punct-$it" }
 
 // Engines free native memory with release()/close(); the pipeline closes only AutoCloseable.
 private class Diarization(private val e: SherpaOnnxDiarizationEngine) : DiarizationEngine by e, AutoCloseable {
@@ -53,6 +63,10 @@ private class Diarization(private val e: SherpaOnnxDiarizationEngine) : Diarizat
 }
 
 private class Asr(private val e: WhisperAsrEngine) : AsrEngine by e, AutoCloseable {
+    override fun close() = e.release()
+}
+
+private class GigaAm(private val e: GigaAmAsrEngine) : AsrEngine by e, AutoCloseable {
     override fun close() = e.release()
 }
 

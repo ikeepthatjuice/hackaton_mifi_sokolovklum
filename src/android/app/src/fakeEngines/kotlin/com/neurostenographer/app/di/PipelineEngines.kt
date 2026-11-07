@@ -18,7 +18,7 @@ import kotlinx.coroutines.delay
  * Debug builds without -PrealEngines; release and `-PrealEngines` use src/realEngines.
  */
 @Suppress("UNUSED_PARAMETER") // same signature as src/realEngines
-internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
+internal fun pipelineEngines(asrLanguage: String = "ru", asrEngine: String = "whisper") = PipelineEngines(
     diarization = EngineSpec(emptyList()) { SyntheticDiarization },
     asr = EngineSpec(emptyList()) { SyntheticAsr },
     aligner = SyntheticAligner,

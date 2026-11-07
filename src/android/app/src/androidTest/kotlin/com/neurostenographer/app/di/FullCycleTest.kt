@@ -26,8 +26,7 @@ import java.io.File
  * files/fullcycle.json, then checked on the host with quality/check_export.py.
  * Runs only with -PrealEngines. Instrumentation args:
  *  - `audio`: file name in the app's external files dir (adb push there); default jfk.wav from test assets;
- *  - `language`: whisper language, default "en" (jfk.wav is English); "ru" for a Russian recording.
- *  - `asr`: "whisper" (default) or "gigaam" (Russian only).
+ *  - `language`: default "ru". ASR (GigaAM) is Russian-only: "en" (e.g. jfk.wav) must end Failed(ENGINE_FAILED).
  * Logs timings and counts only, never transcript text.
  */
 @RunWith(AndroidJUnit4::class)
@@ -46,7 +45,7 @@ class FullCycleTest {
             }
         assertTrue("no audio file ${audio.name}", audio.isFile)
 
-        val engines = pipelineEngines(asrLanguage = args.getString("language") ?: "en", asrEngine = args.getString("asr") ?: "whisper")
+        val engines = pipelineEngines(asrLanguage = args.getString("language") ?: "ru")
         val store = AssetModelStore(target)
         // As AppGraph does at app start: one-time copy assets → filesDir, measured apart from processing.
         val copyStart = SystemClock.elapsedRealtime()

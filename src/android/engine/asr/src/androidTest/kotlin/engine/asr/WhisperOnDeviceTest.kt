@@ -5,6 +5,7 @@ import androidx.test.platform.app.InstrumentationRegistry
 import core.contracts.AudioInput
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertTrue
+import org.junit.Assume.assumeTrue
 import org.junit.Test
 import java.io.File
 import java.io.FileOutputStream
@@ -22,6 +23,8 @@ class WhisperOnDeviceTest {
 
         // 1. Resolve model file (check assets -> cacheDir, filesDir, or /sdcard fallback)
         val modelName = "ggml-base.bin"
+        // Whisper weights left models/manifest.json (GigaAM is the only ASR): skip, not fail, without them.
+        assumeTrue("$modelName not in test assets", testContext.assets.list("")?.contains(modelName) == true)
         val modelFile = resolveOrExtractModel(testContext, appContext, modelName)
 
         if (!modelFile.exists() || modelFile.length() == 0L) {

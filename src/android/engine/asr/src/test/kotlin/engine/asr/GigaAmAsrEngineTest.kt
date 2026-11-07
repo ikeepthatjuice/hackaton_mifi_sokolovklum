@@ -79,6 +79,91 @@ class GigaAmAsrEngineTest {
     }
 
     @Test
+    fun `test mergeChunkWords deduplicates exact matching words in overlap region`() {
+        val engine = GigaAmAsrEngine()
+        val chunk1Words = listOf(
+            AsrWord(text = "Первая", startMs = 15000L, endMs = 15500L),
+            AsrWord(text = "реплика", startMs = 16600L, endMs = 17200L)
+        )
+        val chunk2Words = listOf(
+            AsrWord(text = "реплика", startMs = 16620L, endMs = 17230L),
+            AsrWord(text = "вторая", startMs = 17600L, endMs = 18100L)
+        )
+
+        val merged = engine.mergeChunkWords(
+            existingWords = chunk1Words,
+            newChunkWords = chunk2Words,
+            overlapStartMs = 16500L,
+            overlapEndMs = 17500L,
+            totalDurationMs = 25000L
+        )
+
+        assertEquals(3, merged.size)
+        assertEquals("Первая", merged[0].text)
+        assertEquals("реплика", merged[1].text)
+        assertEquals("вторая", merged[2].text)
+        assertTrue(merged[1].startMs >= merged[0].endMs)
+        assertTrue(merged[2].startMs >= merged[1].endMs)
+    }
+
+    @Test
+    fun `test mergeChunkWords replaces truncated word at seam with complete word`() {
+        val engine = GigaAmAsrEngine()
+        val chunk1Words = listOf(
+            AsrWord(text = "начало", startMs = 15000L, endMs = 16000L),
+            AsrWord(text = "пре", startMs = 17150L, endMs = 17450L) // cut off at seam
+        )
+        val chunk2Words = listOf(
+            AsrWord(text = "прекрасно", startMs = 17150L, endMs = 17800L), // full word
+            AsrWord(text = "день", startMs = 18000L, endMs = 18500L)
+        )
+
+        val merged = engine.mergeChunkWords(
+            existingWords = chunk1Words,
+            newChunkWords = chunk2Words,
+            overlapStartMs = 16500L,
+            overlapEndMs = 17500L,
+            totalDurationMs = 25000L
+        )
+
+        assertEquals(3, merged.size)
+        assertEquals("начало", merged[0].text)
+        assertEquals("прекрасно", merged[1].text)
+        assertEquals("день", merged[2].text)
+        assertEquals(17150L, merged[1].startMs)
+        assertTrue(merged[1].endMs > 17150L)
+        assertTrue(merged[2].startMs >= merged[1].endMs)
+    }
+
+    @Test
+    fun `test mergeChunkWords preserves natural repeated words across seam`() {
+        val engine = GigaAmAsrEngine()
+        val chunk1Words = listOf(
+            AsrWord(text = "да,", startMs = 16000L, endMs = 16300L),
+            AsrWord(text = "да", startMs = 16900L, endMs = 17200L) // repeated speech in chunk 1
+        )
+        val chunk2Words = listOf(
+            AsrWord(text = "да", startMs = 16920L, endMs = 17220L), // duplicate of second "да" in overlap
+            AsrWord(text = "конечно", startMs = 17600L, endMs = 18200L)
+        )
+
+        val merged = engine.mergeChunkWords(
+            existingWords = chunk1Words,
+            newChunkWords = chunk2Words,
+            overlapStartMs = 16500L,
+            overlapEndMs = 17500L,
+            totalDurationMs = 25000L
+        )
+
+        assertEquals(3, merged.size)
+        assertEquals("да,", merged[0].text)
+        assertEquals("да", merged[1].text)
+        assertEquals("конечно", merged[2].text)
+        assertTrue(merged[1].startMs >= merged[0].endMs)
+        assertTrue(merged[2].startMs >= merged[1].endMs)
+    }
+
+    @Test
     fun `test chunk offset is applied to word timestamps`() {
         val engine = GigaAmAsrEngine()
         val tokens = listOf(

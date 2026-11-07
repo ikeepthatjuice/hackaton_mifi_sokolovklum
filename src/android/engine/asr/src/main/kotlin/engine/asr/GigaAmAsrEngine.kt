@@ -33,6 +33,7 @@ data class GigaAmConfig(
     val language: String = "ru",
     val numThreads: Int = 4,
     val maxChunkDurationMs: Long = 20_000L,
+    val overlapDurationMs: Long = 1000L,
     val isFloat32Pcm: Boolean = true
 )
 
@@ -133,14 +134,15 @@ class GigaAmAsrEngine(
             return@withContext emptyList()
         }
 
-        // 4. Chunk audio into slices <= 20 seconds
+        // 4. Chunk audio into slices <= 20 seconds with ~1s overlap
         val sampleRate = input.sampleRateHz
         val maxSamplesPerChunk = (config.maxChunkDurationMs * sampleRate / 1000L).toInt()
         val minSearchSamples = ((config.maxChunkDurationMs - 5000L) * sampleRate / 1000L).toInt().coerceAtLeast(maxSamplesPerChunk / 2)
+        val overlapSamples = (config.overlapDurationMs * sampleRate / 1000L).toInt().coerceAtMost(maxSamplesPerChunk / 4)
 
-        val words = mutableListOf<AsrWord>()
+        var words = listOf<AsrWord>()
         var chunkStartSample = 0
-        var prevWordEndMs = 0L
+        var prevChunkEndSample = 0
 
         while (chunkStartSample < allSamples.size) {
             val remainingSamples = allSamples.size - chunkStartSample
@@ -150,9 +152,11 @@ class GigaAmAsrEngine(
                 findOptimalSplitPoint(allSamples, chunkStartSample + minSearchSamples, chunkStartSample + maxSamplesPerChunk) - chunkStartSample
             }
 
-            val chunkSamples = allSamples.copyOfRange(chunkStartSample, chunkStartSample + chunkLength)
+            val chunkEndSample = chunkStartSample + chunkLength
+            val chunkSamples = allSamples.copyOfRange(chunkStartSample, chunkEndSample)
             val chunkStartOffsetMs = (chunkStartSample.toLong() * 1000L) / sampleRate
             val chunkDurationMs = (chunkLength.toLong() * 1000L) / sampleRate
+            val overlapEndMs = (prevChunkEndSample.toLong() * 1000L) / sampleRate
 
             val nativeTokens = GigaAmNative.transcribePcm(
                 contextHandle = contextHandle,
@@ -167,20 +171,101 @@ class GigaAmAsrEngine(
                     chunkDurationMs = chunkDurationMs
                 )
 
-                for (w in chunkWords) {
-                    val safeStart = maxOf(prevWordEndMs, w.startMs)
-                    val safeEnd = maxOf(safeStart + 50L, w.endMs).coerceAtMost(input.durationMs)
-                    if (safeStart < safeEnd) {
-                        words.add(w.copy(startMs = safeStart, endMs = safeEnd))
-                        prevWordEndMs = safeEnd
-                    }
-                }
+                words = mergeChunkWords(
+                    existingWords = words,
+                    newChunkWords = chunkWords,
+                    overlapStartMs = chunkStartOffsetMs,
+                    overlapEndMs = overlapEndMs,
+                    totalDurationMs = input.durationMs
+                )
             }
 
-            chunkStartSample += chunkLength
+            prevChunkEndSample = chunkEndSample
+            if (chunkEndSample >= allSamples.size) {
+                break
+            }
+            val nextStart = chunkEndSample - overlapSamples
+            chunkStartSample = if (nextStart > chunkStartSample) nextStart else chunkEndSample
         }
 
         words
+    }
+
+    /**
+     * Merges words from a newly transcribed chunk with already recognized words,
+     * deduplicating overlapping words and repairing words cut off at chunk boundaries.
+     * Enforces strictly monotonic timestamps bounded by [totalDurationMs].
+     */
+    internal fun mergeChunkWords(
+        existingWords: List<AsrWord>,
+        newChunkWords: List<AsrWord>,
+        overlapStartMs: Long,
+        overlapEndMs: Long,
+        totalDurationMs: Long
+    ): List<AsrWord> {
+        if (existingWords.isEmpty()) return newChunkWords
+        if (newChunkWords.isEmpty()) return existingWords
+
+        val result = existingWords.toMutableList()
+        var prevWordEndMs = result.lastOrNull()?.endMs ?: 0L
+
+        fun normalize(s: String): String =
+            s.filter { it.isLetterOrDigit() }.lowercase()
+
+        for (curr in newChunkWords) {
+            val currNorm = normalize(curr.text)
+
+            // Overlap check: words before or near the previous chunk end boundary
+            if (curr.startMs < overlapEndMs + 200L) {
+                // 1. Exact or near duplicate check (same normalized text + overlapping / adjacent times)
+                val duplicateIndex = result.indexOfLast { prev ->
+                    val prevNorm = normalize(prev.text)
+                    if (prevNorm.isEmpty() || currNorm.isEmpty()) false
+                    else if (prevNorm == currNorm) {
+                        val timeDiff = kotlin.math.abs(curr.startMs - prev.startMs)
+                        val overlap = maxOf(0L, minOf(curr.endMs, prev.endMs) - maxOf(curr.startMs, prev.startMs))
+                        timeDiff <= 400L || overlap > 0L
+                    } else false
+                }
+
+                if (duplicateIndex != -1) {
+                    // Word already recognized in previous chunk; skip duplicate from overlap
+                    continue
+                }
+
+                // 2. Repair cut-off word at seam: if prev was a prefix of curr cut at the boundary
+                val truncatedIndex = result.indexOfLast { prev ->
+                    val prevNorm = normalize(prev.text)
+                    if (prevNorm.isNotEmpty() && currNorm.startsWith(prevNorm) && currNorm.length > prevNorm.length) {
+                        val timeDiff = kotlin.math.abs(curr.startMs - prev.startMs)
+                        timeDiff <= 300L
+                    } else false
+                }
+
+                if (truncatedIndex != -1) {
+                    val prev = result[truncatedIndex]
+                    val safeStart = if (truncatedIndex > 0) maxOf(result[truncatedIndex - 1].endMs, curr.startMs) else curr.startMs
+                    val safeEnd = maxOf(safeStart + 50L, curr.endMs).coerceAtMost(totalDurationMs)
+                    if (safeStart < safeEnd) {
+                        result[truncatedIndex] = curr.copy(startMs = safeStart, endMs = safeEnd)
+                        if (truncatedIndex == result.size - 1) {
+                            prevWordEndMs = safeEnd
+                        }
+                    }
+                    continue
+                }
+            }
+
+            // 3. New word: append with strictly monotonic timestamp enforcement
+            val safeStart = maxOf(prevWordEndMs, curr.startMs)
+            val safeEnd = maxOf(safeStart + 50L, curr.endMs).coerceAtMost(totalDurationMs)
+            if (safeStart < safeEnd) {
+                result.add(curr.copy(startMs = safeStart, endMs = safeEnd))
+                prevWordEndMs = safeEnd
+            }
+        }
+
+        return result
     }
 
     @Synchronized

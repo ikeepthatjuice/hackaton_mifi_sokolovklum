@@ -14,11 +14,11 @@ android {
     compileSdk = 34
     ndkVersion = "26.1.10909125"
     defaultConfig {
-        applicationId = "com.neurostenographer.llmspike"
+        applicationId = "com.neurostenographer.llmspike.q4"
         minSdk = 26
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.1"
+        versionCode = 2
+        versionName = "0.2-q4-raw"
         ndk { abiFilters += "arm64-v8a" }
         externalNativeBuild {
             cmake { arguments += "-DLLAMA_CPP_DIR=${file("../external/llama.cpp").absolutePath}" }
@@ -38,7 +38,10 @@ android {
 // Run runtime without inventing/copying the team's missing contracts.
 kotlin.sourceSets.getByName("main").kotlin.apply {
     srcDir("../src/main/kotlin")
-    include("**/SpikeActivity.kt", "**/LlamaCppTextGenerator.kt", "**/LlmException.kt", "**/TextGenerator.kt")
+    // Reuse the REAL shared DTO source, do not create spike copies of contracts.
+    srcDir("../../../core/contracts/src/main/kotlin")
+    include("**/SpikeActivity.kt", "**/LlamaCppTextGenerator.kt", "**/LlmException.kt", "**/TextGenerator.kt",
+        "**/ModelOutput.kt", "**/TranscriptValidator.kt", "**/Contracts.kt")
 }
 
 dependencies {

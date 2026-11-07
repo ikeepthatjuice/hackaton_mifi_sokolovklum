@@ -51,6 +51,6 @@ class NativeSmokeTest {
     }
 
     companion object {
-        private const val MODEL_SHA="9465e63a22add5354d9bb4b99e90117043c7124007664907259bd16d043bb031"
+        private const val MODEL_SHA="2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9"
     }
 }

@@ -18,7 +18,10 @@ import kotlinx.coroutines.sync.withLock
 class LlamaCppTextGenerator(
     private val modelFile: File,
     private val expectedSha256: String,
-    private val threads: Int = 4
+    private val threads: Int = 4,
+    // Opt-in diagnostic only. The dedicated spike passes fixed synthetic text;
+    // production callers leave this null so transcripts never enter general logs.
+    private val rawResponse: ((String) -> Unit)? = null,
 ) : TextGenerator {
     private val mutex = Mutex()
     private var handle = 0L
@@ -52,8 +55,10 @@ class LlamaCppTextGenerator(
                 handle = NativeBridge.open(modelFile.absolutePath.toByteArray(Charsets.UTF_8))
                 if (handle == 0L) throw LlmException(LlmFailure.MODEL_LOAD)
             }
-            NativeBridge.generate(handle, rawText.toByteArray(Charsets.UTF_8), maxOutputTokens, threads)
+            val raw = NativeBridge.generate(handle, rawText.toByteArray(Charsets.UTF_8), maxOutputTokens, threads)
                 .toString(Charsets.UTF_8)
+            rawResponse?.invoke(raw) // BEFORE think cleanup and BEFORE the postprocessor validator
+            ModelOutput.visibleText(raw)
         } } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: LlmException) { throw failure }
         catch (_: IOException) { throw LlmException(LlmFailure.MODEL_READ) }

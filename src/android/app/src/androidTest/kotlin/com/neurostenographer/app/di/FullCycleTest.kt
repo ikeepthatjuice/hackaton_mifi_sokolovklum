@@ -26,7 +26,8 @@ import java.io.File
  * files/fullcycle.json, then checked on the host with quality/check_export.py.
  * Runs only with -PrealEngines. Instrumentation args:
  *  - `audio`: file name in the app's external files dir (adb push there); default jfk.wav from test assets;
- *  - `language`: whisper language, default "en" (jfk.wav is English); "ru" for a Russian recording.
+ *  - `asr_words`: "1" also runs ASR alone on the same audio and writes asr_words.txt (see below);
+ *  - `language`: default "ru". ASR (GigaAM) is Russian-only: "en" (e.g. jfk.wav) must end Failed(ENGINE_FAILED).
  * Logs timings and counts only, never transcript text.
  */
 @RunWith(AndroidJUnit4::class)
@@ -45,7 +46,7 @@ class FullCycleTest {
             }
         assertTrue("no audio file ${audio.name}", audio.isFile)
 
-        val engines = pipelineEngines(asrLanguage = args.getString("language") ?: "en")
+        val engines = pipelineEngines(asrLanguage = args.getString("language") ?: "ru")
         val store = AssetModelStore(target)
         // As AppGraph does at app start: one-time copy assets → filesDir, measured apart from processing.
         val copyStart = SystemClock.elapsedRealtime()
@@ -85,6 +86,16 @@ class FullCycleTest {
         val exported = AppGraph.get(target).exporter.export(result, Uri.fromFile(out).toString())
         assertTrue("export failed: ${exported.exceptionOrNull()}", exported.isSuccess)
         Log.i(TAG, "exported bytes=${out.length()} duration_ms=${result.durationMs}")
+
+        // -e asr_words 1: the same audio through ASR alone (no diarization/alignment) → asr_words.txt,
+        // to tell ASR errors from words lost in alignment. Counts only in the log.
+        if (args.getString("asr_words") == "1") {
+            val input = AudioPreparer(target).prepare(Uri.fromFile(audio).toString(), jobId = "asr-only")
+            val asr = engines.asr.load(engines.asr.models.map { store.ensureModel(it) })
+            val words = try { asr.transcribe(input) } finally { (asr as? AutoCloseable)?.close() }
+            File(target.getExternalFilesDir(null), "asr_words.txt").writeText(words.joinToString("\n") { it.text })
+            Log.i(TAG, "asr_only_words=${words.size} exported_words=${result.utterances.sumOf { it.displayText.split(' ').count(String::isNotBlank) }}")
+        }
     }
 
     private companion object {

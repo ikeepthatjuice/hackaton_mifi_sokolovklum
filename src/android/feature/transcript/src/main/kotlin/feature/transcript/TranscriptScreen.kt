@@ -50,8 +50,8 @@ fun TranscriptScreen(
                 modifier = Modifier.padding(top = 24.dp),
             )
         }
-        item { Text("Реплик: ${result.utterances.size}") }
-        if (onUndo != null) item {
+        item(key = "transcript:count") { Text("Реплик: ${result.utterances.size}") }
+        if (onUndo != null) item(key = "transcript:undo") {
             OutlinedButton(onClick = onUndo, enabled = canUndo) { Text("Отменить последнюю правку") }
         }
         if (editMessage != null) item { Text(editMessage) }

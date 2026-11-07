@@ -55,7 +55,8 @@ class FrontEditsTest {
             compose.onNode(hasSetTextAction()).performTextReplacement("Исправленный текст.")
             compose.onNodeWithText("Сохранить").performClick()
             compose.onNodeWithText("Исправленный текст.").assertIsDisplayed()
-            compose.onNodeWithText("Отменить последнюю правку").performScrollTo().performClick()
+            compose.onNode(hasScrollAction()).performScrollToKey("transcript:undo")
+            compose.onNodeWithText("Отменить последнюю правку").performClick()
             compose.onNode(hasScrollAction()).performScrollToKey("e0")
             compose.onNodeWithText("Первая реплика.").assertIsDisplayed()
         }
@@ -64,10 +65,13 @@ class FrontEditsTest {
         ActivityScenario.launch(FrontEditsPreviewActivity::class.java).use {
             actions("e1")
             compose.onNodeWithText("Склеить с предыдущей").performClick()
-            compose.onNodeWithText("Реплик: 2").performScrollTo().assertIsDisplayed()
+            compose.onNode(hasScrollAction()).performScrollToKey("transcript:count")
+            compose.onNodeWithText("Реплик: 2").assertIsDisplayed()
             compose.onNode(hasScrollAction()).performScrollToKey("e0")
             compose.onNodeWithText("Первая реплика. Вторая реплика.").assertIsDisplayed()
-            compose.onNodeWithText("Отменить последнюю правку").performScrollTo().performClick()
+            compose.onNode(hasScrollAction()).performScrollToKey("transcript:undo")
+            compose.onNodeWithText("Отменить последнюю правку").performClick()
+            compose.onNode(hasScrollAction()).performScrollToKey("transcript:count")
             compose.onNodeWithText("Реплик: 3").assertIsDisplayed()
         }
     }

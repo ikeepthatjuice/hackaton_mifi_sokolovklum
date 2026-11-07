@@ -109,7 +109,7 @@ class DefaultTranscriptionPipeline(
                 stage(engines.postprocessor) { it.process(utterances) }
             }
             val processed = withinBudget ?: utterances.map { it.copy(displayText = it.rawText) }
-            val warnings = if (withinBudget == null) listOf("LLM_BUDGET_EXCEEDED") else emptyList()
+            val warnings = if (withinBudget == null) listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.") else emptyList()
 
             // A cancel requested during a non-suspending step still wins over the result.
             currentCoroutineContext().ensureActive()

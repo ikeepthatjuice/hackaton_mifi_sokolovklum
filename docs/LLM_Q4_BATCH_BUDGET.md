@@ -30,7 +30,7 @@ LocalTranscriptPostprocessor по умолчанию объединяет до4 
 
 ## Пункт 5: bounded POSTPROCESS и warning
 
-DefaultTranscriptionPipeline ограничивает **весь** postprocess stage, включая resolve/copy/load моделей, бюджетом `floor(audio.durationMs * 0.30)` (минимум1ms). Используется исходная длительность аудио, не сумма реплик. Собственный deadline даёт Completed с `displayText = rawText` для всех реплик и `TranscriptResult.warnings = ["LLM_BUDGET_EXCEEDED"]`; экспорт JSON по-прежнему не включает внутренние warnings.
+DefaultTranscriptionPipeline ограничивает **весь** postprocess stage, включая resolve/copy/load моделей, бюджетом `floor(audio.durationMs * 0.30)` (минимум1ms). Используется исходная длительность аудио, не сумма реплик. Собственный deadline даёт Completed с `displayText = rawText` для всех реплик и предупреждением в `TranscriptResult.warnings`: «Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.» (текущий экран уже выводит warnings пользователю); экспорт JSON по-прежнему не включает внутренние warnings.
 
 Контракт process возвращает список атомарно, поэтому при whole-stage timeout не публикуются частичные результаты: все реплики возвращаются как rawText. Это сознательная безопасная стратегия, а не утверждение о сохранении ранее оформленных пакетов. Без timeout форматирование сохраняется построчно. Runtime/отсутствующая модель не маскируются под успешный inference; внутренняя чужая CancellationException остаётся engine failure. Явная отмена пользователя остаётся Cancelled, а не Completed с warning.
 

@@ -238,7 +238,7 @@ class DefaultTranscriptionPipelineTest {
         val completed = p.observe(id).value as PipelineState.Completed
         assertEquals(1500L, testScheduler.currentTime) // 30% of 5000 ms audio
         assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
-        assertEquals(listOf("LLM_BUDGET_EXCEEDED"), completed.result.warnings)
+        assertEquals(listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст."), completed.result.warnings)
         assertEquals(0, world.loadedNow)
         assertFalse(jobDir(id).exists())
     }
@@ -251,7 +251,7 @@ class DefaultTranscriptionPipelineTest {
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
         assertEquals(1500L, testScheduler.currentTime)
-        assertEquals(listOf("LLM_BUDGET_EXCEEDED"), completed.result.warnings)
+        assertEquals(listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст."), completed.result.warnings)
         assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
         assertEquals(listOf("diarization", "asr"), world.loadOrder)
         assertEquals(0, world.loadedNow)

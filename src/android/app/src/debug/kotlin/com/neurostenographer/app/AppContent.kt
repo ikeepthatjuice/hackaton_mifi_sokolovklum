@@ -1,9 +1,9 @@
 package com.neurostenographer.app
 
 import androidx.compose.runtime.Composable
-import app.frontdebug.FrontScreensDemo
+import app.frontdebug.FrontPipelineDemo
 
 @Composable
 internal fun AppContent() {
-    FrontScreensDemo()
+    FrontPipelineDemo()
 }

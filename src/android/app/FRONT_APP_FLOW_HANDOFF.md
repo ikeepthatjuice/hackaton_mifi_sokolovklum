@@ -26,3 +26,9 @@ Debug banner сообщает, что движки синтетические; �
   повтор, recreate, Completed, recreate, CreateDocument, JSON прочитан и проверен, повтор после Completed.
 - Только debug synthetic engines; реальные модели/телефон/RTF/RAM/WER не проверялись.
 - Штатные CI #14/#15/#20 ждут зависимостей в main. Независимое ревью не запрошено до зелёного CI.
+
+Debug-only ObservedDebugPipeline делегирует реальному pipeline без изменения результата;
+FrontDebugStarts хранит только job IDs для проверки числа вызовов start (не URI/текст).
+FrontFlowTest поворачивает MainActivity в landscape во время обработки, затем в portrait,
+делает recreate и проверяет неизменность списка start IDs. Всего ровно три запуска:
+первый отменён, второй сохранён в JSON, третий после Completed; поворот их не добавляет.

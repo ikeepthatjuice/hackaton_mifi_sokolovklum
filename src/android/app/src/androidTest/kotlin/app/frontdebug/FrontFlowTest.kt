@@ -1,6 +1,8 @@
 package app.frontdebug
 
 import android.content.ContentValues
+import android.content.pm.ActivityInfo
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.os.ParcelFileDescriptor
 import android.os.SystemClock
@@ -35,6 +37,7 @@ class FrontFlowTest {
             put(MediaStore.MediaColumns.RELATIVE_PATH, "Download/")
         }))
         var exportName: String? = null
+        val initialStarts = FrontDebugStarts.snapshot()
         try {
             requireNotNull(resolver.openOutputStream(source)).use { it.write(silentWav()) }
             ActivityScenario.launch(MainActivity::class.java).use { scenario ->
@@ -55,13 +58,23 @@ class FrontFlowTest {
                 chooseDownloads()
                 clickText(name)
                 clickText("Начать обработку")
+                waitText("Обработка аудио")
+                waitFor {
+                    if (FrontDebugStarts.snapshot().size >= initialStarts.size + 2) automation.rootInActiveWindow else null
+                }
+                val activeStarts = FrontDebugStarts.snapshot()
+                assertEquals(initialStarts.size + 2, activeStarts.size)
+                rotate(scenario, ActivityInfo.SCREEN_ORIENTATION_LANDSCAPE, Configuration.ORIENTATION_LANDSCAPE)
                 scenario.recreate()
                 waitText("Расшифровка", 30_000)
+                assertEquals(activeStarts, FrontDebugStarts.snapshot())
+                rotate(scenario, ActivityInfo.SCREEN_ORIENTATION_PORTRAIT, Configuration.ORIENTATION_PORTRAIT)
                 waitText("Реплик: 2")
                 capture("front-result")
-                // The retained result must survive another Activity recreation.
+                // Rotation/recreation must retain the same result and never invoke start again.
                 scenario.recreate()
                 waitText("Расшифровка")
+                assertEquals(activeStarts, FrontDebugStarts.snapshot())
                 clickText("Сохранить JSON")
                 chooseDownloads()
                 val edit = waitFor {
@@ -92,6 +105,7 @@ class FrontFlowTest {
                 clickText(name)
                 clickText("Начать обработку")
                 waitText("Расшифровка", 30_000)
+                assertEquals(initialStarts.size + 3, FrontDebugStarts.snapshot().size)
             }
         } finally {
             resolver.delete(source, null, null)
@@ -99,6 +113,18 @@ class FrontFlowTest {
                 shell("rm -f /sdcard/Download/$it")
             }
         }
+    }
+
+    private fun rotate(scenario: ActivityScenario<MainActivity>, requested: Int, expected: Int) {
+        scenario.onActivity { it.requestedOrientation = requested }
+        val deadline = SystemClock.uptimeMillis() + 10_000
+        while (SystemClock.uptimeMillis() < deadline) {
+            var actual = Configuration.ORIENTATION_UNDEFINED
+            scenario.onActivity { actual = it.resources.configuration.orientation }
+            if (actual == expected) return
+            SystemClock.sleep(100)
+        }
+        throw AssertionError("Activity did not rotate")
     }
 
     private fun chooseDownloads() {

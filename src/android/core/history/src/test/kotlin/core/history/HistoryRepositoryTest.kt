@@ -107,6 +107,35 @@ class HistoryRepositoryTest {
     }
 
     @Test
+    fun fileWhoseMetaIdIsNotItsNameIsSkipped() = runTest {
+        val r = repo()
+        r.save(result("two"), meta("two", 100))
+        File(tmp.root, "two.json").renameTo(File(tmp.root, "one.json")) // one.json says it is "two"
+        assertEquals(emptyList<HistoryMeta>(), r.list())
+        assertNull(r.load("one"))
+        assertNull(r.load("two"))
+    }
+
+    @Test
+    fun rowThatExportWouldRejectMakesTheEntryBroken() = runTest {
+        val r = repo()
+        r.save(result("job-1"), meta("job-1", 100))
+        val f = File(tmp.root, "job-1.json")
+        val text = f.readText()
+        check("\"start_ms\":0,\"end_ms\":2000" in text)
+        f.writeText(text.replace("\"start_ms\":0,\"end_ms\":2000", "\"start_ms\":3000,\"end_ms\":2000")) // start > end
+        assertEquals(emptyList<HistoryMeta>(), r.list())
+        assertNull(r.load("job-1"))
+    }
+
+    @Test
+    fun saveRejectsJobIdThatIsNotMetaId() = runTest {
+        val bad = runCatching { repo().save(result("job-1"), meta("job-2", 1)) }
+        assertTrue(bad.exceptionOrNull() is IllegalArgumentException)
+        assertFalse(File(tmp.root, "job-2.json").exists())
+    }
+
+    @Test
     fun missingDirectoryIsEmptyList() = runTest {
         assertEquals(emptyList<HistoryMeta>(), repo(File(tmp.root, "absent")).list())
     }

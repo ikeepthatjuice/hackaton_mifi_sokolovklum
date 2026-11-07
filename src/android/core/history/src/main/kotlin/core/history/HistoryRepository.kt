@@ -28,8 +28,9 @@ class HistoryRepository(
     private val dir: File,
     private val dispatcher: CoroutineDispatcher = Dispatchers.IO,
 ) {
-    /** Throws IllegalArgumentException for an id unfit as a file name or a result export would reject. */
+    /** Throws IllegalArgumentException for an id unfit as a file name, jobId != meta.id, or a result export would reject. */
     suspend fun save(result: TranscriptResult, meta: HistoryMeta): Unit = withContext(dispatcher) {
+        require(result.jobId == meta.id) { "result.jobId != meta.id" }
         val file = fileOf(meta.id)
         val transcript = TranscriptJson.encode(result) // {"transcript":[...]}, validates rows
         check(transcript.startsWith("{\"transcript\":")) { "unexpected export shape" }
@@ -43,10 +44,10 @@ class HistoryRepository(
         }
     }
 
-    /** Newest first. Broken or foreign files are skipped, never thrown. */
+    /** Newest first. Broken, foreign or renamed files (meta.id != file name) are skipped, never thrown. */
     suspend fun list(): List<HistoryMeta> = withContext(dispatcher) {
         dir.listFiles { f -> f.isFile && f.name.endsWith(".json") }.orEmpty()
-            .mapNotNull { runCatching { decode(it.readText(Charsets.UTF_8)).meta }.getOrNull() }
+            .mapNotNull { f -> runCatching { decode(f.readText(Charsets.UTF_8), f.name.removeSuffix(".json")).meta }.getOrNull() }
             .sortedByDescending { it.createdAt }
     }
 
@@ -55,7 +56,7 @@ class HistoryRepository(
         if (!ID.matches(id)) return@withContext null
         val file = fileOf(id)
         if (!file.isFile) return@withContext null
-        runCatching { decode(file.readText(Charsets.UTF_8)) }.getOrNull()
+        runCatching { decode(file.readText(Charsets.UTF_8), id) }.getOrNull()
     }
 
     suspend fun delete(id: String): Boolean = withContext(dispatcher) {
@@ -76,11 +77,12 @@ class HistoryRepository(
     }
 
     @Suppress("UNCHECKED_CAST")
-    private fun decode(text: String): HistoryEntry {
+    /** Throws unless meta.id == [fileId] and every row passes the export rules (speaker_N, 0 <= start < end <= duration). */
+    private fun decode(text: String, fileId: String): HistoryEntry {
         val root = Json.parse(text) as Map<String, Any?>
         val m = root["meta"] as Map<String, Any?>
         val meta = HistoryMeta(
-            id = (m["id"] as String).also { require(ID.matches(it)) },
+            id = (m["id"] as String).also { require(it == fileId) { "meta.id != file name" } },
             sourceName = m["sourceName"] as String,
             createdAt = m["createdAt"] as Long,
             durationMs = m["durationMs"] as Long,
@@ -91,7 +93,9 @@ class HistoryRepository(
             val text = r["text"] as String
             Utterance("u$i", r["speaker_id"] as String, r["start_ms"] as Long, r["end_ms"] as Long, text, text)
         }
-        return HistoryEntry(meta, TranscriptResult(meta.id, meta.durationMs, utterances, meta.warnings))
+        val result = TranscriptResult(meta.id, meta.durationMs, utterances, meta.warnings)
+        TranscriptJson.encode(result) // same validation as export; throws on a bad row
+        return HistoryEntry(meta, result)
     }
 
     private companion object {

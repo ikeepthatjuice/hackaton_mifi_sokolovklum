@@ -11,9 +11,12 @@ import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
+import kotlinx.coroutines.async
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.test.advanceUntilIdle
 import kotlinx.coroutines.test.runTest
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Rule
 import org.junit.Test
 import org.junit.rules.TemporaryFolder
@@ -54,6 +57,20 @@ class HistorySavingPipelineTest {
         assertEquals(listOf(done), saved.map { it.id })
         assertEquals("запись.m4a", saved.single().sourceName)
         assertEquals("Привет.", history.load(done)!!.result.utterances.single().displayText)
+    }
+
+    @Test
+    fun completedIsPublishedOnlyAfterTheEntryIsSaved() = runTest {
+        val (inner, history, pipeline) = setup()
+        val id = pipeline.start("content://a")
+        // What a history screen does right after it sees the result.
+        val listedOnCompleted = async { pipeline.observe(id).first { it is PipelineState.Completed }; history.list().map { it.id } }
+        inner.states.getValue(id).value = PipelineState.Completed(result(id))
+        assertFalse(pipeline.observe(id).value is PipelineState.Completed) // save still pending
+        advanceUntilIdle()
+
+        assertEquals(PipelineState.Completed(result(id)), pipeline.observe(id).value)
+        assertEquals(listOf(id), listedOnCompleted.await())
     }
 
     @Test

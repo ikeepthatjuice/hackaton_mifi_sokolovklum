@@ -24,7 +24,9 @@ fun interface ModelStore {
 /**
  * Copies `assets/models/<name>` to `filesDir/models/<name>` once.
  * The copy goes to a temp file and is renamed, so a killed app never leaves a half-written model.
- * If `assets/models/manifest.json` exists, the copy is checked against its `sha256` and `size_bytes`.
+ * If `assets/models/manifest.json` exists, the copy is checked against its `sha256` and `size_bytes`,
+ * and the checked sha is kept next to it (`<name>.sha256`): a cached file is reused only if its size and
+ * that recorded sha match the current manifest, so an app update with same-size new weights recopies.
  *
  * The phone needs the asset size free on top of the APK (weights exist twice); checked with StatFs first.
  * Size comes from the uncompressed asset (noCompress in the app build) or, for a compressed one,
@@ -43,8 +45,12 @@ class AssetModelStore(private val context: Context) : ModelStore {
             val assetPath = "$ASSET_DIR/$name"
             val size = assetLength(assetPath) ?: expected?.sizeBytes
             val target = File(modelsDir, name)
-            // Reuse only a file of the expected size; a different size means new weights after an app update.
-            if (size != null && target.exists() && target.length() == size) return@withContext target
+            val shaFile = File(modelsDir, "$name.sha256")
+            // shortcut: trusts the recorded sha instead of re-hashing the cache, so on-disk corruption of a
+            // same-size copy is not detected; upgrade to a one-time re-hash per process if that shows up.
+            if (size != null && target.exists() && target.length() == size &&
+                (expected?.sha256 == null || recordedSha(shaFile).equals(expected.sha256, ignoreCase = true))
+            ) return@withContext target
 
             val input = try {
                 context.assets.open(assetPath)
@@ -59,8 +65,10 @@ class AssetModelStore(private val context: Context) : ModelStore {
                 )
             }
             modelsDir.mkdirs()
-            // A stale target is replaced, so its space counts as free.
-            val available = freeBytes() + (if (target.exists()) target.length() else 0L)
+            // A stale copy is useless, so free its space before the check: tmp is written while target exists.
+            shaFile.delete()
+            target.delete()
+            val available = freeBytes()
             if (available < size) {
                 input.close()
                 throw PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, size - available)
@@ -89,8 +97,11 @@ class AssetModelStore(private val context: Context) : ModelStore {
                     throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED)
                 }
                 if (!tmp.renameTo(target)) throw PipelineFailure(PipelineError.MODEL_LOAD_FAILED)
+                // Written after the rename: a crash in between only costs a recopy next time.
+                runCatching { shaFile.writeText(sha) }
                 target
             } catch (e: IOException) {
+                tmp.delete() // count space after the partial copy is gone, or requiredBytes is overstated
                 val available = runCatching { freeBytes() }.getOrNull()
                 if (available != null && available < size) {
                     throw PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, size - available, e)
@@ -103,6 +114,8 @@ class AssetModelStore(private val context: Context) : ModelStore {
     }
 
     private fun freeBytes() = StatFs(modelsDir.path).availableBytes
+
+    private fun recordedSha(f: File): String? = runCatching { f.readText().trim() }.getOrNull()
 
     private fun assetLength(path: String): Long? = try {
         context.assets.openFd(path).use { it.length.takeIf { len -> len >= 0 } }

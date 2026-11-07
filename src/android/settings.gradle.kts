@@ -21,7 +21,12 @@ include(":core:contracts")
 include(":core:audio")
 include(":core:pipeline")
 include(":core:export")
+
 // Front modules; addition agreed with back in B2/#5.
 include(":feature:import", ":feature:transcript")
+
+// Engines
+include(":engine:asr")
+include(":engine:diarization")
+include(":engine:alignment")
 include(":engine:llm")
-// Остальные engine/* подключаются PR владельцев.

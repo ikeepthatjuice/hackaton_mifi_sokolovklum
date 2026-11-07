@@ -9,7 +9,7 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import app.frontdebug.FrontExportDemo
-import app.frontdebug.FrontScreensDemo
+import app.frontdebug.FrontPipelineDemo
 
 @Composable
 internal fun AppContent() {
@@ -18,6 +18,6 @@ internal fun AppContent() {
         TextButton(onClick = { exportDemo = !exportDemo }) {
             Text(if (exportDemo) "DEBUG: к импорту" else "DEBUG: проверить сохранение JSON")
         }
-        if (exportDemo) FrontExportDemo { exportDemo = false } else FrontScreensDemo()
+        if (exportDemo) FrontExportDemo { exportDemo = false } else FrontPipelineDemo()
     }
 }

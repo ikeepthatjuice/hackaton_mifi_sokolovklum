@@ -12,4 +12,13 @@ if [ -n "$found" ]; then
   echo "$found" >&2
   exit 1
 fi
+
+# Test engines must never reach a release build: no Fake* classes or files in any src/main.
+fakes=$( { git ls-files 'src/android/*src/main/*' | grep -E '/Fake[^/]*\.(kt|java)$';
+           git grep -l -E '(class|object|interface)[[:space:]]+Fake' -- 'src/android/*src/main/*'; } || true)
+if [ -n "$fakes" ]; then
+  echo "Fake-реализации в src/main (только src/test):" >&2
+  echo "$fakes" | sort -u >&2
+  exit 1
+fi
 echo "OK: запрещённых файлов нет"

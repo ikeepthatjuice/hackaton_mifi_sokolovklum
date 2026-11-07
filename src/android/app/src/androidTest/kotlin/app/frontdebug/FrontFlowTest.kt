@@ -156,14 +156,17 @@ class FrontFlowTest {
         }
     }
 
-    private fun waitAppText(text: String) = awaitCondition("app text: $text") {
-        compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
+    private fun isAppWindowActive(): Boolean =
+        automation.rootInActiveWindow?.packageName?.toString() == instrumentation.targetContext.packageName
+
+    private fun waitAppText(text: String) = awaitCondition("active app window and text: $text") {
+        isAppWindowActive() && compose.onAllNodesWithText(text).fetchSemanticsNodes().isNotEmpty()
     }
 
     private fun clickAppText(text: String) {
         val matcher = hasText(text) and isEnabled()
         awaitCondition("enabled app control: $text") {
-            compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+            isAppWindowActive() && compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNode(matcher).performClick()
     }
@@ -171,7 +174,7 @@ class FrontFlowTest {
     private fun clickAudioChooser() {
         val matcher = (hasText("Выбрать аудио") or hasText("Выбрать другой файл")) and isEnabled()
         awaitCondition("audio chooser after cancellation/reset") {
-            compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
+            isAppWindowActive() && compose.onAllNodes(matcher).fetchSemanticsNodes().isNotEmpty()
         }
         compose.onNode(matcher).performClick()
     }

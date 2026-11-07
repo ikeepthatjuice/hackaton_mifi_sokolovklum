@@ -115,13 +115,12 @@ class DefaultTranscriptionPipeline(
             var warnings = emptyList<String>()
             val raw = { utterances.map { it.copy(displayText = it.rawText) } }
             val processed = try {
-                // First portion = 1 utterance (fast first result), then POSTPROCESS_PORTION at a time.
+                // POSTPROCESS_PORTION utterances per call; finished ones survive the cap.
                 // At the cap the running portion is cancelled: llama.cpp checks Thread.isInterrupted per
                 // decode step, so generation stops. Finished portions are kept, the rest stay raw.
                 val done = stage(engines.postprocessor, suppressCloseErrors = false) { processor ->
                     val done = ArrayList<Utterance>(utterances.size)
-                    val portions = utterances.take(1).let { if (it.isEmpty()) emptyList() else listOf(it) } +
-                        utterances.drop(1).chunked(POSTPROCESS_PORTION)
+                    val portions = utterances.chunked(POSTPROCESS_PORTION)
                     coroutineScope {
                         val budget = launch { delay(budgetMs) }
                         val work = launch { for (portion in portions) done += engineCall { processor.process(portion) } }
@@ -202,8 +201,8 @@ class DefaultTranscriptionPipeline(
         this is PipelineState.Completed || this is PipelineState.Failed || this is PipelineState.Cancelled
 
     private companion object {
-        /** Utterances per LLM call: small enough to keep progress on timeout, large enough for batching. */
-        const val POSTPROCESS_PORTION = 4
+        /** One utterance per LLM call. A51: batch of 12 timed out at 18 s (0/12); scalar is 4-5 s warm. */
+        const val POSTPROCESS_PORTION = 1
         /** Floor of the LLM cap: a 10 s clip would otherwise get 3 s, less than one utterance on A51. */
         const val POSTPROCESS_MIN_BUDGET_MS = 20_000L
     }

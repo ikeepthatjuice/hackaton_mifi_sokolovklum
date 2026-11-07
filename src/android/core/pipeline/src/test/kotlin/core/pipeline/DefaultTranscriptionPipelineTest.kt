@@ -256,7 +256,7 @@ class DefaultTranscriptionPipelineTest {
         assertEquals(PipelineState.Failed(PipelineError.OUT_OF_MEMORY), p.observe(id).value)
     }
 
-    // 6 utterances → portions 1 + 4 + 1. Fakes take 5000 ms audio: cap = max(1500, 20 000) = 20 000 ms.
+    // 6 utterances, one per LLM call. Fakes take 5000 ms audio: cap = max(1500, 20 000) = 20 000 ms.
     private fun sixUtterances() {
         world.turns = (0 until 6).map { SpeakerTurn("speaker_${it % 2 + 1}", it * 800L, it * 800L + 800L) }
         world.words = (0 until 6).map { AsrWord("слово$it", it * 800L + 100L, it * 800L + 500L) }
@@ -271,9 +271,9 @@ class DefaultTranscriptionPipelineTest {
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
         assertEquals(20_000L, testScheduler.currentTime)
-        assertEquals(listOf(1, 4, 1), world.postprocessCalls)
-        assertEquals(listOf("Слово0.", "Слово1.", "Слово2.", "Слово3.", "Слово4.", "слово5"), completed.result.utterances.map { it.displayText })
-        assertEquals(listOf("Пунктуация и регистр обработаны в 5 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), completed.result.warnings)
+        assertEquals(listOf(1, 1, 1), world.postprocessCalls)
+        assertEquals(listOf("Слово0.", "Слово1.", "слово2", "слово3", "слово4", "слово5"), completed.result.utterances.map { it.displayText })
+        assertEquals(listOf("Пунктуация и регистр обработаны в 2 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), completed.result.warnings)
         assertEquals(0, world.loadedNow)
         assertFalse(jobDir(id).exists())
     }
@@ -315,7 +315,7 @@ class DefaultTranscriptionPipelineTest {
 
         val result = (p.observe(id).value as PipelineState.Completed).result
         assertEquals(20_000L, testScheduler.currentTime)
-        assertEquals(listOf(1, 4), world.postprocessCalls)
+        assertEquals(listOf(1, 1), world.postprocessCalls)
         assertEquals(listOf("Слово0.", "слово1", "слово2", "слово3", "слово4", "слово5"), result.utterances.map { it.displayText })
         assertEquals(listOf("Пунктуация и регистр обработаны в 1 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), result.warnings)
         assertEquals(0, world.loadedNow)
@@ -347,8 +347,8 @@ class DefaultTranscriptionPipelineTest {
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
         assertEquals(25_000L, testScheduler.currentTime) // 2000 copy + 3000 load + 20 000 cap
-        assertEquals(listOf("слово5"), completed.result.utterances.drop(5).map { it.displayText })
-        assertTrue(completed.result.warnings.single().contains("5 из 6"))
+        assertEquals(listOf("Слово0.", "Слово1.", "слово2", "слово3", "слово4", "слово5"), completed.result.utterances.map { it.displayText })
+        assertTrue(completed.result.warnings.single().contains("2 из 6"))
         assertEquals(0, world.loadedNow)
     }
 

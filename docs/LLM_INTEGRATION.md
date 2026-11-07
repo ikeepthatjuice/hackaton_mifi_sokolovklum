@@ -1,12 +1,12 @@
 # Q2/Q3 — локальный postprocessor: передача Ярику и Илье
 
-Ветка: feat/llm-qa-model. Основа main на старте: 6894b29b0c43f1edc27969b2825fe387e00ab15c (пустой initial commit). PR #1, #2, #3 проверены как открытые, не слиты. Общую сборку, contracts, model manifest, CI и app/DI эта ветка не меняет.
+Обновлено 7 ноября 2026. Ветка feat/llm-qa-model включает main 886c022fa9b84557f0bee75a5a83fd983d774bbe нормальным merge. Источник API — слитый core/contracts из main; копий DTO нет. AGENTS.md прочитан из main. Текущая интеграция описана в [LLM_MAIN_INTEGRATION.md](LLM_MAIN_INTEGRATION.md).
 
-Прочитаны приложенные PROJECT_PLAN.md v3.0, SYUBIK_LLM_QA.md, TEAM_START.md. Санёк уже APPROVED PR #3 f09c91f (19:31 UTC); дополнительный approval не создавался. После старта появился B2 PR #5, SHA 662c71688f0df5a349b3c750388bb6af803ea16b: проверен фактический diff, LLM-модуль с этими исходниками прошёл 28 tests (4 contracts +24 LLM/JNI). Как потребитель Сюбик одобрил этот API; CI на SHA пока отсутствует, B2 не слит. В main нет AGENTS.md: прочитано предложение из PR #3 f09c91f, принято расположение модулей src/android/. Изначально проверялись предложенные типы PR #2 427cf4e; итоговая проверка выполнена на точных Contracts.kt/Pipeline.kt из B2 PR #5 662c716. Это НЕ утверждённые merged contracts. Их копия в этой ветке не создаётся. До согласования и слияния bootstrap/contracts этот PR не готов к merge.
+LocalTranscriptPostprocessor реализует core.contracts.TranscriptPostprocessor. Модуль :engine:llm включён в settings.gradle.kts; общий scripts/fetch-native.sh подготавливает pinned llama.cpp до проверки sherpa cache. App DI/manifest и общий model manifest здесь не меняются. Проверки общей Gradle-сборки оцениваются только по актуальному HEAD, результаты раннего spike не являются их заменой.
 
 ## Реализация
 
-- LocalTranscriptPostprocessor реализует общий `suspend process(List<Utterance>): List<Utterance>` из текущего предложения contracts.
+- LocalTranscriptPostprocessor реализует общий `suspend process(List<Utterance>): List<Utterance>` из слитого core.contracts.TranscriptPostprocessor.
 - LlamaCppTextGenerator загружает проверенный GGUF и действительно вызывает локальный llama.cpp через JNI. JSON, ID, speakerId и времена модель не получает.
 - TranscriptValidator проверяет число/порядок реплик и неизменность id, speakerId, startMs, endMs, rawText. Сравнивает слова по порядку после NFC и lower-case (Locale.ROOT). Ё отличается от е; отрицания и числа словами не удаляются. Отдельно сохраняет числа с десятичными разделителями, знаками, датами/дробями и символами единиц, а также защищённые символы. Разрешено менять ограниченный набор пунктуации и регистр. Это консервативная лексическая проверка, не доказательство неизменности любого оттенка смысла пунктуации.
 - При искажении displayText возвращается rawText с диагностикой FORMAT_REJECTED. Ошибка загрузки/модели/decode не превращается в успешный raw fallback; исключение идёт в pipeline. CancellationException не поглощается.
@@ -25,14 +25,14 @@
 
 ## Предложение общих изменений — выполняет/подтверждает Ярик
 
-До отдельного согласования Ярика и Ильи module не линкуется с whisper или общим APK. Отдельная Android spike-сборка находится в engine/llm/spike и использует только runtime, без копий DTO. Дальнейшие предложения после согласования и независимого ревью bootstrap/contracts:
+До отдельного согласования Ярика и Ильи module не линкуется с whisper или общим APK. Отдельная Android spike-сборка находится в engine/llm/spike и использует только runtime, без копий DTO. Оставшиеся шаги после ревью Ильи и владельцев общих файлов:
 
-1. Согласовать пакет core.contracts и расположение его исходников в стандартном source set модуля. Не переносить Contracts.kt из PR #2 вслепую поверх других типов.
-2. В src/android/settings.gradle.kts добавить `include(":engine:llm")`. В app dependencies — `implementation(project(":engine:llm"))`. Эти изменения здесь не внесены.
+1. Использовать существующий core.contracts из main. Собственных копий или переносов DTO нет.
+2. `include(":engine:llm")` уже добавлен в src/android/settings.gradle.kts. Зависимость app на модуль и DI ещё не добавлены: после проверки совместного native APK с whisper это согласуют Ярик, Илья и Сюбик.
 3. Внести сведения из dependencies.json в единый models/manifest.json и явную доставку весов. По AGENTS из bootstrap эксперту нужен APK с весами: при сборке включить GGUF в assets (без коммита веса), а при первом запуске скопировать в app-private filesDir, сверить SHA. Процедура/размер APK и лимиты сдачи требуют подтверждения. Не использовать недоступный app путь /data/local/tmp как production-путь.
 4. App/DI создаёт runtime с File из filesDir и закреплённым SHA, затем LocalTranscriptPostprocessor(runtime, diagnostic=...). Pipeline переводит исключения в типизированное состояние Failed и накапливает enum diagnostics в job warnings; отмена должна оставаться отменой. При пустом тексте INPUT_SKIPPED не означает, что обязательная LLM запускалась.
 5. По окончании владения runtime вызвать suspend close() из finally. Одновременные ASR/LLM jobs и RAM контролирует pipeline. При offline-проверке веса уже установлены; runtime не скачивает их.
-6. После подключения запускать из src/android: `./gradlew :engine:llm:testDebugUnitTest :engine:llm:assembleDebug :engine:llm:lintDebug`. Это предлагаемые tasks Android library plugin, их выполнение в общей сборке пока не подтверждено.
+6. После подключения запускать из src/android: `./gradlew :engine:llm:testDebugUnitTest :engine:llm:assembleDebug :engine:llm:lintDebug`. Это tasks подключённого Android library; подтверждение их выполнения — CI на текущем HEAD. NativeSmokeTest без модели явно skips.
 
 Этот документ — запрос технического согласования через Draft PR, не утверждение, что согласование уже получено.
 

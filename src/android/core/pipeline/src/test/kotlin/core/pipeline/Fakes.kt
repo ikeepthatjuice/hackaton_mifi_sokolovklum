@@ -9,6 +9,7 @@ import core.contracts.Stage
 import core.contracts.TranscriptAligner
 import core.contracts.TranscriptPostprocessor
 import core.contracts.Utterance
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.awaitCancellation
 import java.io.File
 
@@ -22,6 +23,9 @@ class FakeWorld(val jobsDir: File) {
     var engineFailure: Throwable? = null // thrown by the engine of failAt instead of RuntimeException
     var failLoadOf: String? = null
     var onPostprocess: (() -> Unit)? = null
+    var llmLoadDelayMs = 0L
+    var generationDelayMs = 0L
+    var llmCloseFailure: Throwable? = null
     var loadedNow = 0
     var maxLoaded = 0
     val loadOrder = mutableListOf<String>()
@@ -73,18 +77,22 @@ class FakeAligner : TranscriptAligner {
 
 class FakePostprocessor(private val world: FakeWorld) : TranscriptPostprocessor, AutoCloseable {
     override suspend fun process(utterances: List<Utterance>): List<Utterance> {
+        delay(world.generationDelayMs)
         world.gate(Stage.POSTPROCESS)
         world.onPostprocess?.invoke()
         return utterances.map { it.copy(displayText = it.rawText.replaceFirstChar(Char::uppercase) + ".") }
     }
-    override fun close() { world.loadedNow-- }
+    override fun close() { world.loadedNow--; world.llmCloseFailure?.let { throw it } }
 }
 
 /** Returns a dummy file per model; can fail with a given PipelineFailure. */
 class FakeModelStore(private val dir: File) : ModelStore {
     var failure: PipelineFailure? = null
     var hangName: String? = null
+    var llmDelayMs = 0L
+    var llmFailure: Throwable? = null
     override suspend fun ensureModel(name: String): File {
+        if (name == "llm.gguf") { delay(llmDelayMs); llmFailure?.let { throw it } }
         if (name == hangName) awaitCancellation()
         failure?.let { throw it }
         return File(dir, name).apply { writeText(name) }
@@ -97,5 +105,5 @@ fun fakeEngines(world: FakeWorld) = PipelineEngines(
     },
     asr = EngineSpec(listOf("whisper.ggml")) { world.loaded("asr"); FakeAsrEngine(world) },
     aligner = FakeAligner(),
-    postprocessor = EngineSpec(listOf("llm.gguf")) { world.loaded("llm"); FakePostprocessor(world) },
+    postprocessor = EngineSpec(listOf("llm.gguf")) { delay(world.llmLoadDelayMs); world.loaded("llm"); FakePostprocessor(world) },
 )

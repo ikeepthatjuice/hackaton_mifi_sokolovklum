@@ -102,14 +102,24 @@ class DefaultTranscriptionPipeline(
             val utterances = engineCall { engines.aligner.align(words, turns) }
 
             state.value = PipelineState.Running(Stage.POSTPROCESS, null)
-            // Whole stage budget includes model preparation/load, not just decoding.
-            // Only our deadline becomes rawText + warning; user cancellation still propagates.
+            // Resolve/copy and EngineSpec.load finish BEFORE the generation budget starts.
             val budgetMs = (audio.durationMs.coerceAtLeast(0).toDouble() * 0.30).toLong().coerceAtLeast(1L)
-            val withinBudget = withTimeoutOrNull(budgetMs) {
-                stage(engines.postprocessor) { it.process(utterances) }
+            var warnings = emptyList<String>()
+            val raw = { utterances.map { it.copy(displayText = it.rawText) } }
+            val processed = try {
+                val withinBudget = stage(engines.postprocessor, suppressCloseErrors = false) { processor ->
+                    withTimeoutOrNull(budgetMs) { engineCall { processor.process(utterances) } }
+                }
+                if (withinBudget == null) {
+                    warnings = listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.")
+                    raw()
+                } else withinBudget
+            } catch (failure: Throwable) {
+                // User/job cancellation always wins; an engine-internal cancellation is an LLM error.
+                currentCoroutineContext().ensureActive()
+                warnings = listOf("Пунктуация не обработана: ошибка локальной LLM")
+                raw()
             }
-            val processed = withinBudget ?: utterances.map { it.copy(displayText = it.rawText) }
-            val warnings = if (withinBudget == null) listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.") else emptyList()
 
             // A cancel requested during a non-suspending step still wins over the result.
             currentCoroutineContext().ensureActive()
@@ -126,13 +136,15 @@ class DefaultTranscriptionPipeline(
     }
 
     /** Resolve models, load the engine, run [block], always release the engine. */
-    private suspend fun <T, R> stage(spec: EngineSpec<T>, block: suspend (T) -> R): R {
+    private suspend fun <T, R> stage(spec: EngineSpec<T>, suppressCloseErrors: Boolean = true, block: suspend (T) -> R): R {
         val files = spec.models.map { modelStore.ensureModel(it) }
         val engine = guarded(PipelineError.MODEL_LOAD_FAILED) { spec.load(files) }
         try {
             return engineCall { block(engine) }
         } finally {
-            (engine as? AutoCloseable)?.runCatching { close() }
+            (engine as? AutoCloseable)?.let { owned ->
+                if (suppressCloseErrors) runCatching { owned.close() } else owned.close()
+            }
         }
     }
 

@@ -30,9 +30,9 @@ LocalTranscriptPostprocessor по умолчанию объединяет до4 
 
 ## Пункт 5: bounded POSTPROCESS и warning
 
-DefaultTranscriptionPipeline ограничивает **весь** postprocess stage, включая resolve/copy/load моделей, бюджетом `floor(audio.durationMs * 0.30)` (минимум1ms). Используется исходная длительность аудио, не сумма реплик. Собственный deadline даёт Completed с `displayText = rawText` для всех реплик и предупреждением в `TranscriptResult.warnings`: «Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.» (текущий экран уже выводит warnings пользователю); экспорт JSON по-прежнему не включает внутренние warnings.
+DefaultTranscriptionPipeline ограничивает **только генерацию** после resolve/copy и EngineSpec.load, бюджетом `floor(audio.durationMs * 0.30)` (минимум1ms). Используется исходная длительность аудио, не сумма реплик. Собственный deadline даёт Completed с `displayText = rawText` для всех реплик и предупреждением в `TranscriptResult.warnings`: «Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.» (текущий экран уже выводит warnings пользователю); экспорт JSON по-прежнему не включает внутренние warnings.
 
-Контракт process возвращает список атомарно, поэтому при whole-stage timeout не публикуются частичные результаты: все реплики возвращаются как rawText. Это сознательная безопасная стратегия, а не утверждение о сохранении ранее оформленных пакетов. Без timeout форматирование сохраняется построчно. Runtime/отсутствующая модель не маскируются под успешный inference; внутренняя чужая CancellationException остаётся engine failure. Явная отмена пользователя остаётся Cancelled, а не Completed с warning.
+Контракт process возвращает список атомарно, поэтому при timeout генерации не публикуются частичные результаты: все реплики возвращаются как rawText. Это сознательная безопасная стратегия, а не утверждение о сохранении ранее оформленных пакетов. Без timeout форматирование сохраняется построчно. Любая ошибка локальной LLM, включая копирование/загрузку, native/OOM и внутреннюю CancellationException при активной задаче, даёт Completed со всеми rawText и warning «Пунктуация не обработана: ошибка локальной LLM». Это fallback, а не успешный inference. Явная отмена пользователя остаётся Cancelled, а не Completed с warning.
 
 Лимит кооперативный: JNI abort callback реагирует на отмену, затем pipeline ждёт безопасного освобождения модели. На реальном устройстве возможен небольшой scheduler/native-cleanup overhead после deadline; точный wall-time/пик RAM надо измерить на A51. Нельзя выдавать виртуальное время unit-теста за физический RTF.
 
@@ -41,8 +41,31 @@ LocalTranscriptPostprocessor теперь AutoCloseable: существующи�
 ## Валидация и интеграция
 
 - LLM unit/JNI: scalar guard, think cleanup, batch ids/per-row fallback, отмена/reuse и ownership настоящего runtime.
-- Pipeline unit: deadline → raw+warning/cleanup, бюджет включает подготовку весов, быстрый путь без warning, user cancel и чужая engine cancellation различаются. Для5s synthetic audio deadline проверяется на1500ms виртуального времени.
+- Pipeline unit: deadline → raw+warning/cleanup, подготовка/загрузка не расходуют бюджет генерации; ошибки LLM дают все rawText + warning, быстрый путь без warning, user cancel и чужая engine cancellation различаются. Для5s synthetic audio deadline проверяется на1500ms виртуального времени.
 - Общий CI/Emulator проверяются на текущем SHA PR отдельно. Веса, SDK, downloaded runtime sources, signing key и APK не коммитятся.
-- models/manifest.json сохраняет3 ML-записи предложенного registry и добавляетQ4. Владелец Ярик должен объединить одинаковую структуру с #21; app DI/общие contracts этим изменением не переписаны. Потребители pipeline и warning должны ревьюить core/pipeline.
+- models/manifest.json убран из diff #23 до merge #2. После merge обычным merge подтягивается main и добавляется только Q4 без изменений проверенных ML-записей; app DI/общие contracts этим изменением не переписаны. Потребители pipeline и warning должны ревьюить core/pipeline.
 
 Перед merge нужны Илья (LLM/native), Ярик (manifest/pipeline), Санёк (docs и потребитель pipeline). После1–3 команда повторяет A51 raw/guard/PSS/time; batching/budget затем проверяет на общем pipeline с реальным аудио без передачи кейса в логи.
+
+## Уточнение перед merge #23
+
+Для production EngineSpec.load использовать `LocalTranscriptPostprocessor.load(file, sha256)`:
+фабрика выполняет checksum и native open до возврата процессора. Прямой конструктор runtime
+сохраняет lazy load для standalone spike/тестов и не предназначен для load callback pipeline.
+Связывание app DI принадлежит back; app DI этим PR не изменён.
+Таймаут оборачивает только `processor.process`, подготовка и освобождение runtime вне него.
+Контракт возвращает список атомарно: при ошибке любой генерации отбрасывается весь частичный результат.
+Тесты проверяют 2s copy + 3s load + 1.4s generation → успех и тот же load + зависшую generation → timeout на 6.5s виртуального времени.
+
+Проверки этой правки: pipeline **24/24**, LLM/JNI **34/34** с реальным Q4
+(`LLM_SMOKE_MODEL=/tmp/syubik-ru-models/Q4_K_M.gguf`), Python **28/28**,
+`bash scripts/check-forbidden.sh` и `git diff --check` — PASS.
+JVM-наборы скомпилированы Kotlin 2.0.21/JDK 17 и запущены через JUnitCore.
+Для pipeline извлечены без изменения platform-free объявления ModelStore и
+AudioPreparationException из Android-исходников; Android ModelStore/AudioPreparer
+этим JVM-прогоном не проверяются. Полный Gradle/Android CI — отдельные проверки нового SHA.
+Новый native тест вызывает prepare(), удаляет временную ссылку на вес и успешно
+генерирует через уже загруженный handle: загрузка действительно завершена до generate.
+Ошибки copy/load/inference/internal cancellation/native/OOM/close, неизменность всех DTO
+при fallback и отмена во время подготовки и генерации покрыты тестами.
+Физический A51 и новый APK на этом изменении не запускались/не собирались.

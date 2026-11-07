@@ -32,9 +32,21 @@ class LlamaCppTextGenerator(
         require(threads in 1..8)
     }
 
-    override suspend fun generate(rawText: String, maxOutputTokens: Int): String = mutex.withLock {
-        if (closed.get()) throw LlmException(LlmFailure.CLOSED)
+    /** Eager checksum/native load for EngineSpec.load, before the generation timeout. */
+    suspend fun prepare() { withRuntime { } }
+
+    override suspend fun generate(rawText: String, maxOutputTokens: Int): String {
         require(rawText.length <= 1000 && maxOutputTokens in 32..1024)
+        return withRuntime {
+            val raw = NativeBridge.generate(handle, rawText.toByteArray(Charsets.UTF_8), maxOutputTokens, threads)
+                .toString(Charsets.UTF_8)
+            rawResponse?.invoke(raw) // BEFORE think cleanup and BEFORE the postprocessor validator
+            ModelOutput.visibleText(raw)
+        }
+    }
+
+    private suspend fun <T> withRuntime(block: () -> T): T = mutex.withLock {
+        if (closed.get()) throw LlmException(LlmFailure.CLOSED)
         currentCoroutineContext().ensureActive()
         try { runInterruptible(Dispatchers.IO) {
             if (handle == 0L) {
@@ -55,10 +67,7 @@ class LlamaCppTextGenerator(
                 handle = NativeBridge.open(modelFile.absolutePath.toByteArray(Charsets.UTF_8))
                 if (handle == 0L) throw LlmException(LlmFailure.MODEL_LOAD)
             }
-            val raw = NativeBridge.generate(handle, rawText.toByteArray(Charsets.UTF_8), maxOutputTokens, threads)
-                .toString(Charsets.UTF_8)
-            rawResponse?.invoke(raw) // BEFORE think cleanup and BEFORE the postprocessor validator
-            ModelOutput.visibleText(raw)
+            block()
         } } catch (cancelled: CancellationException) { throw cancelled }
         catch (failure: LlmException) { throw failure }
         catch (_: IOException) { throw LlmException(LlmFailure.MODEL_READ) }

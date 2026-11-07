@@ -19,6 +19,20 @@ class LocalTranscriptPostprocessor(
     private val maxBatchSize: Int = 4,
     private val maxBatchChars: Int = 900,
 ) : TranscriptPostprocessor, AutoCloseable {
+    companion object {
+        /** Use from EngineSpec.load: preparation is outside the pipeline generation budget. */
+        suspend fun load(modelFile: java.io.File, expectedSha256: String, threads: Int = 4): LocalTranscriptPostprocessor {
+            val runtime = LlamaCppTextGenerator(modelFile, expectedSha256, threads)
+            try {
+                runtime.prepare()
+                return LocalTranscriptPostprocessor(runtime)
+            } catch (failure: Throwable) {
+                runtime.close()
+                throw failure
+            }
+        }
+    }
+
     private val closed = AtomicBoolean(false)
 
     init {
@@ -56,7 +70,7 @@ class LocalTranscriptPostprocessor(
                 batch.add(work[cursor++])
             }
             val packet = if (batch.size == 1) batch.single().raw else BatchFormat.encode(batch.map { it.raw })
-            // Model/load/decode failures propagate; only the pipeline-owned deadline is downgraded.
+            // Failures propagate to the pipeline, which returns all rawText with an error warning.
             val generated = generator.generate(packet, maxOutputTokens)
             currentCoroutineContext().ensureActive()
             diagnostic(PostprocessEvent.INFERENCE_COMPLETED)

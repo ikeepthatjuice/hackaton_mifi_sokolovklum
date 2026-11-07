@@ -244,17 +244,94 @@ class DefaultTranscriptionPipelineTest {
     }
 
     @Test
-    fun postprocessDeadlineAlsoBoundsModelPreparation() = runTest {
+    fun preparationAndLoadAreOutsideGenerationBudget() = runTest {
         val p = pipeline()
-        models.hangName = "llm.gguf"
-        val id = p.start("content://synthetic/load-deadline")
+        models.llmDelayMs = 2000L
+        world.llmLoadDelayMs = 3000L
+        world.generationDelayMs = 1400L // still below the full 1500ms generation allowance
+        val id = p.start("content://synthetic/slow-load")
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
-        assertEquals(1500L, testScheduler.currentTime)
-        assertEquals(listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст."), completed.result.warnings)
-        assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
-        assertEquals(listOf("diarization", "asr"), world.loadOrder)
+        assertEquals(6400L, testScheduler.currentTime)
+        assertTrue(completed.result.warnings.isEmpty())
+        assertEquals(listOf("Привет.", "Здравствуйте."), completed.result.utterances.map { it.displayText })
         assertEquals(0, world.loadedNow)
+    }
+
+    @Test
+    fun generationStillTimesOutAfterSlowPreparationAndLoad() = runTest {
+        val p = pipeline()
+        models.llmDelayMs = 2000L
+        world.llmLoadDelayMs = 3000L
+        world.hangAt = Stage.POSTPROCESS
+        val id = p.start("content://synthetic/slow-load-timeout")
+        advanceUntilIdle()
+        val completed = p.observe(id).value as PipelineState.Completed
+        assertEquals(6500L, testScheduler.currentTime)
+        assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
+        assertTrue(completed.result.warnings.single().contains("лимит времени"))
+        assertEquals(0, world.loadedNow)
+    }
+
+    private fun assertLlmFallback(state: PipelineState) {
+        val result = (state as PipelineState.Completed).result
+        val expected = FakeAligner().align(
+            listOf(core.contracts.AsrWord("привет", 100, 900), core.contracts.AsrWord("здравствуйте", 2100, 3000)),
+            listOf(core.contracts.SpeakerTurn("speaker_1", 0, 2000), core.contracts.SpeakerTurn("speaker_2", 2000, 5000)),
+        )
+        assertEquals(expected, result.utterances) // all ids, speakers, times and rawText unchanged
+        assertEquals(listOf("Пунктуация не обработана: ошибка локальной LLM"), result.warnings)
+    }
+
+    @Test
+    fun allLlmErrorsKeepCompleteRawTranscript() {
+        for (failure in listOf(RuntimeException("synthetic"), OutOfMemoryError("synthetic"),
+            UnsatisfiedLinkError("synthetic"), java.util.concurrent.CancellationException("internal"))) runTest {
+            val p = pipeline()
+            world.failAt = Stage.POSTPROCESS
+            world.engineFailure = failure
+            val id = p.start("content://synthetic/llm-error")
+            advanceUntilIdle()
+            assertLlmFallback(p.observe(id).value)
+            assertEquals(0, world.loadedNow)
+            assertFalse(jobDir(id).exists())
+        }
+    }
+
+    @Test
+    fun llmCopyAndLoadErrorsKeepCompleteRawTranscript() {
+        for (copyFailure in listOf(true, false)) runTest {
+            val p = pipeline()
+            if (copyFailure) models.llmFailure = PipelineFailure(PipelineError.INSUFFICIENT_STORAGE, 42L)
+            else world.failLoadOf = "llm"
+            val id = p.start("content://synthetic/llm-load-error")
+            advanceUntilIdle()
+            assertLlmFallback(p.observe(id).value)
+            assertEquals(0, world.loadedNow)
+        }
+    }
+
+    @Test
+    fun llmCloseErrorDiscardsFormattedOutputAndKeepsRawTranscript() = runTest {
+        val p = pipeline()
+        world.llmCloseFailure = IllegalStateException("synthetic close failure")
+        val id = p.start("content://synthetic/llm-close-error")
+        advanceUntilIdle()
+        assertLlmFallback(p.observe(id).value)
+        assertEquals(0, world.loadedNow)
+    }
+
+    @Test
+    fun userCancelDuringLlmPreparationRemainsCancelled() = runTest {
+        val p = pipeline()
+        models.hangName = "llm.gguf"
+        val id = p.start("content://synthetic/cancel-copy")
+        runCurrent()
+        p.cancel(id)
+        advanceUntilIdle()
+        assertEquals(PipelineState.Cancelled, p.observe(id).value)
+        assertEquals(0, world.loadedNow)
+        assertFalse(jobDir(id).exists())
     }
 
     @Test
@@ -268,12 +345,12 @@ class DefaultTranscriptionPipelineTest {
     }
 
     @Test
-    fun engineInternalPostprocessCancellationIsNotOurBudgetTimeout() = runTest {
+    fun engineInternalPostprocessCancellationIsLlmFallback() = runTest {
         val p = pipeline()
         world.failAt = Stage.POSTPROCESS
         world.engineFailure = java.util.concurrent.CancellationException("synthetic internal cancel")
         val id = p.start("content://synthetic/internal-cancel")
         advanceUntilIdle()
-        assertEquals(PipelineState.Failed(PipelineError.ENGINE_FAILED), p.observe(id).value)
+        assertLlmFallback(p.observe(id).value)
     }
 }

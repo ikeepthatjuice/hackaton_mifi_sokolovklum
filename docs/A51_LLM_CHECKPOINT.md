@@ -19,7 +19,7 @@
 
 Package `com.neurostenographer.llmspike.q4`, label «LLM Q4 RAW diagnostic». Устанавливается рядом с прежним spike. Только фиксированная вымышленная строка, ввода реального текста нет.
 
-- Q4_K_M:396704928 bytes; SHA256 `2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9`. dependencies.json и models/manifest.json согласованы по файлу, источнику, размеру и SHA. Исходные ML-записи manifest сохранены из текущего ML-предложения; Ярик проверяет объединение с #21.
+- Q4_K_M:396704928 bytes; SHA256 `2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9`. dependencies.json содержит эту запись; models/manifest.json исключён из diff #23 до merge #2. Затем в manifest из main добавляется только Q4, без изменений проверенных ML-записей.
 - Проверен tokenizer.chat_template в реально скачанном GGUF: ChatML, eos151645, enable_thinking=false добавляет пустой `<think>\n\n</think>\n\n`. Этот префикс сохранён; `/no_think` задан отдельно. Native sampler — настоящий greedy, остановка по llama_vocab_is_eog. Добавлен русский prompt с двумя другими примерами (не тестовая фраза телефона).
 - Raw callback вызывается до think-cleanup и валидатора. В production callback по умолчанию отсутствует. В изолированном APK он пишет только фиксированную синтетику в `LLM_SPIKE_RAW` и показывает raw на экране. `LLM_SPIKE_GUARD` сообщает accepted/reason/changed; итоговый displayText отдельно.
 - Полные think-блоки удаляются; незавершённая мысль не считается видимым ответом. Если после очистки слова нарушены, guard возвращает исходный текст.

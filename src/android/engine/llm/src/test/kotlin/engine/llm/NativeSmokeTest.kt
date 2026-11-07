@@ -50,6 +50,23 @@ class NativeSmokeTest {
         } finally { runtime.close() }
     }
 
+    @Test fun eagerPreparationLoadsModelBeforeGeneration() = runBlocking {
+        val path = System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for eager preparation", !path.isNullOrBlank())
+        val dir = java.nio.file.Files.createTempDirectory("synthetic-llm-prepare")
+        val link = java.nio.file.Files.createSymbolicLink(dir.resolve("model.gguf"), File(path!!).toPath().toAbsolutePath())
+        val runtime = LlamaCppTextGenerator(link.toFile(), MODEL_SHA)
+        try {
+            withTimeout(120_000) { runtime.prepare() }
+            java.nio.file.Files.delete(link) // generate must use the already loaded handle
+            assertTrue(withTimeout(30_000) { runtime.generate("да", 256) }.isNotBlank())
+        } finally {
+            runtime.close()
+            java.nio.file.Files.deleteIfExists(link)
+            java.nio.file.Files.deleteIfExists(dir)
+        }
+    }
+
     companion object {
         // Q4 is the current default; do not silently verify a different model.
         private const val MODEL_SHA="2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9"

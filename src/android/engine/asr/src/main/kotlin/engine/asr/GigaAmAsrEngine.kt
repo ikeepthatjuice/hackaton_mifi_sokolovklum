@@ -25,10 +25,10 @@ import kotlin.math.sqrt
  * @param isFloat32Pcm True if raw PCM is 32-bit float LE, false if 16-bit signed int LE
  */
 data class GigaAmConfig(
-    val encoderPath: String = "models/gigaam-encoder.int8.onnx",
-    val decoderPath: String = "models/gigaam-decoder.onnx",
-    val joinerPath: String = "models/gigaam-joiner.onnx",
-    val tokensPath: String = "models/gigaam-tokens.txt",
+    val encoderPath: String = "models/gigaam-v3-punct-encoder.int8.onnx",
+    val decoderPath: String = "models/gigaam-v3-punct-decoder.onnx",
+    val joinerPath: String = "models/gigaam-v3-punct-joiner.onnx",
+    val tokensPath: String = "models/gigaam-v3-punct-tokens.txt",
     val baseDir: File? = null,
     val language: String = "ru",
     val numThreads: Int = 4,

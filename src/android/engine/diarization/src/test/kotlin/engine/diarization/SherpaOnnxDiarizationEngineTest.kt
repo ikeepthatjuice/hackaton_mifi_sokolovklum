@@ -1,6 +1,5 @@
 package engine.diarization
 
-import com.k2fsa.sherpa.onnx.OfflineSpeakerDiarizationSegment
 import core.contracts.AudioInput
 import kotlinx.coroutines.runBlocking
 import org.junit.Assert.assertEquals
@@ -13,8 +12,8 @@ class SherpaOnnxDiarizationEngineTest {
     fun `test single speaker gets speaker_1`() {
         val engine = SherpaOnnxDiarizationEngine()
         val segments = listOf(
-            OfflineSpeakerDiarizationSegment(start = 0.5f, end = 2.5f, speaker = 0),
-            OfflineSpeakerDiarizationSegment(start = 3.0f, end = 5.5f, speaker = 0)
+            SherpaOnnxSegment(clusterId = 0, startMs = 500, endMs = 2500),
+            SherpaOnnxSegment(clusterId = 0, startMs = 3000, endMs = 5500)
         )
 
         val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 6000)
@@ -30,10 +29,10 @@ class SherpaOnnxDiarizationEngineTest {
     fun `test two speakers alternate and retain respective IDs`() {
         val engine = SherpaOnnxDiarizationEngine()
         val segments = listOf(
-            OfflineSpeakerDiarizationSegment(start = 0.1f, end = 1.5f, speaker = 5),
-            OfflineSpeakerDiarizationSegment(start = 2.0f, end = 3.5f, speaker = 12),
-            OfflineSpeakerDiarizationSegment(start = 4.0f, end = 5.0f, speaker = 5),
-            OfflineSpeakerDiarizationSegment(start = 5.2f, end = 6.0f, speaker = 12)
+            SherpaOnnxSegment(clusterId = 5, startMs = 100, endMs = 1500),
+            SherpaOnnxSegment(clusterId = 12, startMs = 2000, endMs = 3500),
+            SherpaOnnxSegment(clusterId = 5, startMs = 4000, endMs = 5000),
+            SherpaOnnxSegment(clusterId = 12, startMs = 5200, endMs = 6000)
         )
 
         val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 7000)
@@ -49,10 +48,10 @@ class SherpaOnnxDiarizationEngineTest {
     fun `test returning first voice retains original ID across multi-speaker conversation`() {
         val engine = SherpaOnnxDiarizationEngine()
         val segments = listOf(
-            OfflineSpeakerDiarizationSegment(start = 1.0f, end = 3.0f, speaker = 100),
-            OfflineSpeakerDiarizationSegment(start = 3.5f, end = 5.0f, speaker = 200),
-            OfflineSpeakerDiarizationSegment(start = 5.5f, end = 7.0f, speaker = 300),
-            OfflineSpeakerDiarizationSegment(start = 7.5f, end = 9.0f, speaker = 100)
+            SherpaOnnxSegment(clusterId = 100, startMs = 1000, endMs = 3000),
+            SherpaOnnxSegment(clusterId = 200, startMs = 3500, endMs = 5000),
+            SherpaOnnxSegment(clusterId = 300, startMs = 5500, endMs = 7000),
+            SherpaOnnxSegment(clusterId = 100, startMs = 7500, endMs = 9000)
         )
 
         val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 10000)
@@ -68,10 +67,10 @@ class SherpaOnnxDiarizationEngineTest {
     fun `test dynamic cluster count without pre-fixing number of participants`() {
         val engine = SherpaOnnxDiarizationEngine()
         val segments = listOf(
-            OfflineSpeakerDiarizationSegment(start = 0.1f, end = 0.5f, speaker = 10),
-            OfflineSpeakerDiarizationSegment(start = 0.6f, end = 1.2f, speaker = 20),
-            OfflineSpeakerDiarizationSegment(start = 1.5f, end = 2.0f, speaker = 30),
-            OfflineSpeakerDiarizationSegment(start = 2.5f, end = 3.0f, speaker = 40)
+            SherpaOnnxSegment(clusterId = 10, startMs = 100, endMs = 500),
+            SherpaOnnxSegment(clusterId = 20, startMs = 600, endMs = 1200),
+            SherpaOnnxSegment(clusterId = 30, startMs = 1500, endMs = 2000),
+            SherpaOnnxSegment(clusterId = 40, startMs = 2500, endMs = 3000)
         )
 
         val turns = engine.mapSegmentsToSpeakerTurns(segments, maxDurationMs = 4000)
@@ -86,8 +85,8 @@ class SherpaOnnxDiarizationEngineTest {
     @Test
     fun `test pauses and silence do not shift time coordinates`() = runBlocking {
         val segments = listOf(
-            OfflineSpeakerDiarizationSegment(start = 1.0f, end = 2.0f, speaker = 1),
-            OfflineSpeakerDiarizationSegment(start = 10.0f, end = 11.5f, speaker = 2)
+            SherpaOnnxSegment(clusterId = 1, startMs = 1000, endMs = 2000),
+            SherpaOnnxSegment(clusterId = 2, startMs = 10000, endMs = 11500)
         )
 
         val engine = SherpaOnnxDiarizationEngine(

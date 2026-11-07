@@ -12,11 +12,11 @@
 | Библиотека | Роль | Репозиторий / Источник | Точный тег / Commit SHA | Лицензия |
 |---|---|---|---|---|
 | **whisper.cpp** | ASR runtime | `https://github.com/ggerganov/whisper.cpp.git` | Tag `v1.7.1`<br>Commit: `ebca09a3d1033417b0c630bbbe607b0f185b1488` | MIT |
-| **sherpa-onnx** | Diarization runtime | Официальный Android prebuilt `sherpa-onnx-v1.10.30-android.tar.bz2` | Релиз `v1.10.30`<br>SHA-256: `ebca29196a638938d3178fc43f90580486cd22813ab1eb0b269c6b7d7547ff16` | Apache-2.0 |
+| **sherpa-onnx** | Diarization runtime | Официальный Android prebuilt v2.0.1 (via `scripts/fetch-native.sh` из PR #9) | Релиз `v2.0.1` (`c-api.h` + `libsherpa-onnx-c-api.so` + `libonnxruntime.so`) | Apache-2.0 |
 
 ### Способ подключения внешнего C++ кода:
 - `whisper.cpp`: Git submodule в `external/whisper.cpp` (commit `ebca09a3d1033417b0c630bbbe607b0f185b1488`). `CMakeLists.txt` в `src/android/engine/asr` подключает сабмодуль через `add_subdirectory(...)` и линкует таргет `whisper`.
-- `sherpa-onnx`: Официальный prebuilt Android-архив распаковывается в `external/sherpa-onnx-android/` скриптом `scripts/fetch-sherpa-onnx.sh`. Нативный JNI C++ код убран — используется штатный `com.k2fsa.sherpa.onnx.OfflineSpeakerDiarization` с загрузкой `libsherpa-onnx-jni.so` из `jniLibs`.
+- `sherpa-onnx`: Официальный prebuilt Android-архив распаковывается в `external/sherpa-onnx-android/` скриптом `scripts/fetch-native.sh` (PR #9). `CMakeLists.txt` в `src/android/engine/diarization` линкует `sherpa-onnx-c-api` и `onnxruntime` как `IMPORTED` библиотеки и собирает `sherpa_onnx_jni.so`.
 
 ---
 

@@ -1,12 +1,5 @@
 package engine.diarization
 
-import com.k2fsa.sherpa.onnx.FastClusteringConfig
-import com.k2fsa.sherpa.onnx.OfflineSpeakerDiarization
-import com.k2fsa.sherpa.onnx.OfflineSpeakerDiarizationConfig
-import com.k2fsa.sherpa.onnx.OfflineSpeakerDiarizationSegment
-import com.k2fsa.sherpa.onnx.OfflineSpeakerSegmentationModelConfig
-import com.k2fsa.sherpa.onnx.OfflineSpeakerSegmentationPyannoteModelConfig
-import com.k2fsa.sherpa.onnx.SpeakerEmbeddingExtractorConfig
 import core.contracts.AudioInput
 import core.contracts.DiarizationEngine
 import core.contracts.SpeakerTurn
@@ -31,14 +24,14 @@ data class SherpaOnnxDiarizationConfig(
 )
 
 /**
- * Offline Speaker Diarization Engine based on sherpa-onnx (OfflineSpeakerDiarization).
+ * Offline Speaker Diarization Engine based on sherpa-onnx C-API.
  */
 class SherpaOnnxDiarizationEngine(
     private val config: SherpaOnnxDiarizationConfig = SherpaOnnxDiarizationConfig(),
-    private val mockSegmentProvider: ((AudioInput) -> List<OfflineSpeakerDiarizationSegment>)? = null
+    private val mockSegmentProvider: ((AudioInput) -> List<SherpaOnnxSegment>)? = null
 ) : DiarizationEngine {
 
-    private var diarizer: OfflineSpeakerDiarization? = null
+    private var contextHandle: Long = 0L
 
     fun resolveFile(path: String): File {
         val file = File(path)
@@ -53,8 +46,11 @@ class SherpaOnnxDiarizationEngine(
 
     @Synchronized
     fun initialize() {
-        if (diarizer == null) {
-            if (mockSegmentProvider != null) return
+        if (contextHandle == 0L) {
+            if (!SherpaOnnxNative.isNativeLoaded()) {
+                if (mockSegmentProvider != null) return
+                throw IllegalStateException("MODEL_LOAD_FAILED: Native sherpa-onnx library is not loaded: ${SherpaOnnxNative.getLoadError()?.message}")
+            }
 
             val segFile = resolveFile(config.segmentationModelPath)
             val embFile = resolveFile(config.embeddingModelPath)
@@ -66,35 +62,26 @@ class SherpaOnnxDiarizationEngine(
                 throw IllegalStateException("MODEL_LOAD_FAILED: Embedding model file not found: ${embFile.absolutePath}")
             }
 
-            try {
-                val diarConfig = OfflineSpeakerDiarizationConfig(
-                    segmentation = OfflineSpeakerSegmentationModelConfig(
-                        pyannote = OfflineSpeakerSegmentationPyannoteModelConfig(model = segFile.absolutePath),
-                        numThreads = 2
-                    ),
-                    embedding = SpeakerEmbeddingExtractorConfig(
-                        model = embFile.absolutePath,
-                        numThreads = 2,
-                        provider = "cpu"
-                    ),
-                    clustering = FastClusteringConfig(
-                        numClusters = -1,
-                        threshold = config.clusteringThreshold
-                    ),
-                    minDurationOn = config.minSpeechDurationMs / 1000.0f,
-                    minDurationOff = config.minSilenceDurationMs / 1000.0f
-                )
-                diarizer = OfflineSpeakerDiarization(diarConfig)
-            } catch (t: Throwable) {
-                throw IllegalStateException("MODEL_LOAD_FAILED: Failed to initialize sherpa-onnx diarization: ${t.message}", t)
+            contextHandle = SherpaOnnxNative.initDiarization(
+                segmentationModelPath = segFile.absolutePath,
+                embeddingModelPath = embFile.absolutePath,
+                clusteringThreshold = config.clusteringThreshold,
+                minSpeechDurationMs = config.minSpeechDurationMs,
+                minSilenceDurationMs = config.minSilenceDurationMs
+            )
+
+            if (contextHandle == 0L) {
+                throw IllegalStateException("MODEL_LOAD_FAILED: Failed to initialize sherpa-onnx diarization context")
             }
         }
     }
 
     @Synchronized
     fun release() {
-        diarizer?.release()
-        diarizer = null
+        if (contextHandle != 0L) {
+            SherpaOnnxNative.freeDiarization(contextHandle)
+            contextHandle = 0L
+        }
     }
 
     override suspend fun diarize(input: AudioInput): List<SpeakerTurn> = withContext(Dispatchers.Default) {
@@ -105,18 +92,22 @@ class SherpaOnnxDiarizationEngine(
         val rawSegments = if (mockSegmentProvider != null) {
             mockSegmentProvider.invoke(input)
         } else {
+            if (!SherpaOnnxNative.isNativeLoaded()) {
+                throw IllegalStateException("MODEL_LOAD_FAILED: Native sherpa-onnx library not loaded: ${SherpaOnnxNative.getLoadError()?.message}")
+            }
             ensureInitialized()
+
             val samples = readPcmSamples(input)
             if (samples.isEmpty()) {
                 return@withContext emptyList()
             }
 
-            val d = diarizer ?: throw IllegalStateException("MODEL_LOAD_FAILED: Diarizer is null")
-            val segments = try {
-                d.process(samples)
-            } catch (t: Throwable) {
-                throw IllegalStateException("ENGINE_FAILED: Diarization process failed: ${t.message}", t)
-            }
+            val segments = SherpaOnnxNative.diarizePcm(
+                contextHandle = contextHandle,
+                samples = samples,
+                sampleRate = input.sampleRateHz
+            ) ?: throw IllegalStateException("ENGINE_FAILED: Diarization processing failed")
+
             segments.toList()
         }
 
@@ -125,7 +116,7 @@ class SherpaOnnxDiarizationEngine(
 
     @Synchronized
     private fun ensureInitialized() {
-        if (diarizer == null) {
+        if (contextHandle == 0L) {
             initialize()
         }
     }
@@ -171,21 +162,21 @@ class SherpaOnnxDiarizationEngine(
     }
 
     internal fun mapSegmentsToSpeakerTurns(
-        segments: List<OfflineSpeakerDiarizationSegment>,
+        segments: List<SherpaOnnxSegment>,
         maxDurationMs: Long
     ): List<SpeakerTurn> {
         if (segments.isEmpty()) return emptyList()
 
-        val sortedSegments = segments.sortedBy { it.start }
+        val sortedSegments = segments.sortedBy { it.startMs }
         val clusterToSpeakerId = mutableMapOf<Int, String>()
         val turns = mutableListOf<SpeakerTurn>()
 
         for (seg in sortedSegments) {
-            val safeStart = (seg.start * 1000f).toLong().coerceAtLeast(0L)
-            val safeEnd = (seg.end * 1000f).toLong().coerceAtLeast(safeStart + 1L).coerceAtMost(maxDurationMs)
+            val safeStart = seg.startMs.coerceAtLeast(0L)
+            val safeEnd = seg.endMs.coerceAtLeast(safeStart + 1L).coerceAtMost(maxDurationMs)
             if (safeStart >= safeEnd) continue
 
-            val speakerId = clusterToSpeakerId.getOrPut(seg.speaker) {
+            val speakerId = clusterToSpeakerId.getOrPut(seg.clusterId) {
                 "speaker_${clusterToSpeakerId.size + 1}"
             }
 

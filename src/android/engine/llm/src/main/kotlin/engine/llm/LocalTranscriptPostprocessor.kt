@@ -16,8 +16,8 @@ class LocalTranscriptPostprocessor(
     private val maxChunkChars: Int = 400,
     private val maxOutputTokens: Int = 512,
     private val diagnostic: (PostprocessEvent) -> Unit = {},
-    private val maxBatchSize: Int = 4,
-    private val maxBatchChars: Int = 900,
+    private val maxBatchSize: Int = 12,
+    private val maxBatchChars: Int = 600,
 ) : TranscriptPostprocessor, AutoCloseable {
     companion object {
         /** Use from EngineSpec.load: preparation is outside the pipeline generation budget. */
@@ -38,7 +38,7 @@ class LocalTranscriptPostprocessor(
     init {
         require(maxChunkChars in 32..1000)
         require(maxOutputTokens in 32..1024)
-        require(maxBatchSize in 1..8)
+        require(maxBatchSize in 1..12)
         require(maxBatchChars in 64..1000)
     }
 

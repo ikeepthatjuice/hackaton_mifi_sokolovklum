@@ -69,3 +69,5 @@ AudioPreparationException из Android-исходников; Android ModelStore/
 Ошибки copy/load/inference/internal cancellation/native/OOM/close, неизменность всех DTO
 при fallback и отмена во время подготовки и генерации покрыты тестами.
 Агент физический A51 не запускал и APK новых budget-правок не собирал; тестировщик подтвердил отдельный standalone 1d68a73, см. A51_LLM_CHECKPOINT.md.
+
+Продолжение: [KV-префикс и 12-row батчи](LLM_KV_PERFORMANCE.md). Старые показатели выше относятся к предыдущей ревизии; новая производительность на A51 ещё не измерена.

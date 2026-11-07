@@ -47,6 +47,33 @@ class BatchPostprocessorTest {
         assertEquals(input.map { it.id },result.map { it.id })
     }
 
+    @Test fun twelveShortRowsShareOneCallAndKeepImmutableIds() = runBlocking {
+        val input = rows(*Array(12) { if (it % 2 == 0) "да" else "нет" })
+        var calls = 0
+        val result = LocalTranscriptPostprocessor(TextGenerator { packet, _ ->
+            calls++
+            assertEquals(12, packet.lines().size)
+            assertTrue(packet.length <= 600)
+            packet.lines().joinToString("\n") { it + "." }
+        }).process(input)
+        assertEquals(1, calls)
+        assertEquals(input.map { it.id }, result.map { it.id })
+        assertTrue(result.all { it.displayText == it.rawText + "." })
+    }
+
+    @Test fun packetsSplitBeforeSixHundredCharacters() = runBlocking {
+        val input = rows(*Array(12) { "нам нужно двенадцать папок для встречи завтра утром" })
+        var calls = 0
+        val result = LocalTranscriptPostprocessor(TextGenerator { packet, _ ->
+            calls++
+            assertTrue(packet.length <= 600)
+            assertTrue(packet.lines().size <= 12)
+            packet.lines().joinToString("\n") { it + "." }
+        }).process(input)
+        assertEquals(2, calls)
+        assertTrue(result.all { it.displayText == it.rawText + "." })
+    }
+
     @Test fun closesOwnedGeneratorExactlyOnceAndCannotRunAgain() = runBlocking {
         var closes=0
         val generator=object : TextGenerator,AutoCloseable {

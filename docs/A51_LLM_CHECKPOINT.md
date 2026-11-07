@@ -73,3 +73,5 @@ PSS и warning. Затем сравнивать короткий prompt, лим�
 на `LocalTranscriptPostprocessor.load(model, BuildConfig.LLM_SHA256)` либо вызвать
 `generator.prepare()` до возврата обёртки. Иначе первый native open всё ещё попадёт в
 `process`, хотя ensureModel/копирование в #23 уже находятся за пределами таймаута.
+
+Продолжение: [KV-префикс и 12-row батчи](LLM_KV_PERFORMANCE.md). Старые показатели выше относятся к предыдущей ревизии; новая производительность на A51 ещё не измерена.

@@ -16,3 +16,13 @@ adb logcat -s LLM_SPIKE_RAW:I LLM_SPIKE_GUARD:I AndroidRuntime:E
 Промпт: русский, два других few-shot примера; canonical Qwen3 ChatML + /no_think + пустой think-prefill, native greedy и EOG stop. Неполные think-блоки не выдаются за ответ. Полный отчёт и протокол повторного A51: docs/A51_LLM_CHECKPOINT.md.
 
 Linux Q4 v2: тестовая фраза реально стала «мы не переносим встречу. Нужно 12 папок.», guard принял. Расширенный русский набор14/16 принят,2 искажения имён откатились; это не результат телефона. Новый APK нужно прогнать на A51, записав SHA, raw/guard/display, cold/warm и PSS. Бюджет полного pipeline и batching проверяются отдельно от этого runtime spike.
+
+## KV / 12-row diagnostic update
+
+See root docs/LLM_KV_PERFORMANCE.md. Runtime now caches only the fixed prompt prefix;
+use the same button repeatedly for warm measurement. New synthetic batch button tests
+12 rows with an 18-second generation budget; prepare/load is timed separately.
+APK target package remains com.neurostenographer.llmspike.q4 and can update the old
+standalone diagnostic with the same signing key. Fixed synthetic text only, no INTERNET.
+New APK SHA256:606483934febe6e493f856fc637abd5b2adfdff3b6fd9b3ffb4b442d80f92a12.
+Do not claim A51 performance until the new build has been tested on the device.

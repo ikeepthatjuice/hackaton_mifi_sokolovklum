@@ -116,40 +116,22 @@ std::vector<llama_token> tokenize(const llama_vocab * vocab, const std::string &
 
 }
 
-extern "C" JNIEXPORT jlong JNICALL Java_engine_llm_NativeBridge_open(
-        JNIEnv * env, jobject, jbyteArray path_bytes) {
-    try {
-        const auto path = bytes(env, path_bytes);
-        std::call_once(backend_once, [] {
-            llama_log_set(silent_log, nullptr);
-            ggml_log_set(silent_log, nullptr);
-            llama_backend_init();
-        });
-        InterruptCheck interrupt(env);
-        auto params = llama_model_default_params();
-        params.n_gpu_layers = 0;
-        params.progress_callback = InterruptCheck::progress;
-        params.progress_callback_user_data = &interrupt;
-        Model model(llama_model_load_from_file(path.c_str(), params));
-        if (interrupt.interrupted()) {
-            fail(env, "java/lang/InterruptedException", "LLM cancelled");
-            return 0;
-        }
-        if (!model) throw std::runtime_error("load");
-        return reinterpret_cast<jlong>(new Runtime(std::move(model)));
-    } catch (...) {
-        fail(env, "java/lang/IllegalStateException", "LLM model load failed");
-        return 0;
-    }
+namespace {
+void diag_log(const char * line) {
+#ifdef __ANDROID__
+    __android_log_write(ANDROID_LOG_INFO, "LLM_DIAG", line);
+#else
+    std::fprintf(stderr, "LLM_DIAG %s\n", line);
+#endif
 }
 
-namespace {
 // One logcat line per generate() call, numbers only: never prompt or output text.
 struct CallDiag {
     using clock = std::chrono::steady_clock;
     clock::time_point start = clock::now();
     int prompt_tokens = -1, input_tokens = -1, max_tokens = -1, prefix_tokens = -1, gen_tokens = 0;
-    bool prefix_reused = false, think = false;
+    int n_threads = -1, n_batch = -1, n_ubatch = -1;
+    bool prefix_reused = false, think = false, new_context = false;
     long long prefill_ms = -1, gen_ms = -1;
     const char * outcome = "error";
     static long long ms(clock::time_point a, clock::time_point b) {
@@ -166,17 +148,49 @@ struct CallDiag {
         char line[320];
         std::snprintf(line, sizeof line,
             "prompt_tokens=%d input_tokens=%d prefix_tokens=%d prefix_reused=%d prefill_ms=%lld "
-            "gen_tokens=%d max_tokens=%d gen_ms=%lld think=%d total_ms=%lld outcome=%s",
+            "gen_tokens=%d max_tokens=%d gen_ms=%lld think=%d n_threads=%d n_batch=%d n_ubatch=%d new_context=%d "
+            "total_ms=%lld outcome=%s",
             prompt_tokens, input_tokens, prefix_tokens, prefix_reused ? 1 : 0, prefill_ms,
-            gen_tokens, max_tokens, gen_ms, think ? 1 : 0, ms(start, clock::now()), outcome);
-#ifdef __ANDROID__
-        __android_log_write(ANDROID_LOG_INFO, "LLM_DIAG", line);
-#else
-        std::fprintf(stderr, "LLM_DIAG %s\n", line);
-#endif
+            gen_tokens, max_tokens, gen_ms, think ? 1 : 0, n_threads, n_batch, n_ubatch, new_context ? 1 : 0,
+            ms(start, clock::now()), outcome);
+        diag_log(line);
     }
 };
 }  // namespace
+
+extern "C" JNIEXPORT jlong JNICALL Java_engine_llm_NativeBridge_open(
+        JNIEnv * env, jobject, jbyteArray path_bytes) {
+    try {
+        const auto path = bytes(env, path_bytes);
+        std::call_once(backend_once, [] {
+            llama_log_set(silent_log, nullptr);
+            ggml_log_set(silent_log, nullptr);
+            llama_backend_init();
+        });
+        InterruptCheck interrupt(env);
+        auto params = llama_model_default_params();
+        params.n_gpu_layers = 0;
+        params.progress_callback = InterruptCheck::progress;
+        params.progress_callback_user_data = &interrupt;
+        const auto load_start = CallDiag::clock::now();
+        Model model(llama_model_load_from_file(path.c_str(), params));
+        {
+            char line[96];
+            std::snprintf(line, sizeof line, "load load_mode=%s lazy_mode=%d load_ms=%lld ok=%d", llama_load_mode_name(params.load_mode),
+                static_cast<int>(params.lazy_mode), CallDiag::ms(load_start, CallDiag::clock::now()), model ? 1 : 0);
+            diag_log(line);
+        }
+        if (interrupt.interrupted()) {
+            fail(env, "java/lang/InterruptedException", "LLM cancelled");
+            return 0;
+        }
+        if (!model) throw std::runtime_error("load");
+        return reinterpret_cast<jlong>(new Runtime(std::move(model)));
+    } catch (...) {
+        fail(env, "java/lang/IllegalStateException", "LLM model load failed");
+        return 0;
+    }
+}
 
 extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         JNIEnv * env, jobject, jlong handle, jbyteArray text_bytes, jint max_tokens, jint threads) {
@@ -239,10 +253,12 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
             params.n_threads = threads;
             params.n_threads_batch = threads;
             runtime->context.reset(llama_init_from_model(model, params));
+            diag.new_context = true;
         }
         if (!runtime->context) throw std::runtime_error("context");
         Invocation invocation{*runtime};
         auto * ctx = runtime->context.get();
+        diag.n_threads = threads; diag.n_batch = static_cast<int>(llama_n_batch(ctx)); diag.n_ubatch = static_cast<int>(llama_n_ubatch(ctx));
         llama_set_n_threads(ctx, threads, threads);
         llama_set_abort_callback(ctx, atomic_abort, runtime);
         auto decode = [&](llama_token * data, int size) {

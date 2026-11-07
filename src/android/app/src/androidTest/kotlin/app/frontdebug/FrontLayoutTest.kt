@@ -63,6 +63,21 @@ class FrontLayoutTest {
         }
     }
 
+    @Test fun llmWarningsAreVisibleAndExportRemainsReachable() {
+        // The two warnings emitted by #23; only synthetic preview data, no model run.
+        val warnings = listOf(
+            "llm-timeout" to "Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.",
+            "llm-failure" to "Пунктуация не обработана: ошибка локальной LLM",
+        )
+        for ((screen, warning) in warnings) {
+            launch(screen).use {
+                compose.onNodeWithText(warning).performScrollTo().assertIsDisplayed()
+                compose.onNode(hasScrollAction()).performScrollToKey("transcript:export")
+                compose.onNodeWithText("Сохранить JSON").assertIsDisplayed()
+            }
+        }
+    }
+
     @Test fun longTranscriptScrollsToEndAndBackToExportAtLargeFont() {
         launch("transcript").use { scenario ->
             // Key-based scrolling runs through the lazy-list UI-thread action. Scanning 500 nodes

@@ -20,7 +20,6 @@ include(":app")
 include(":core:contracts")
 include(":core:audio")
 include(":core:pipeline")
-include(":core:export")
 // Front modules; addition agreed with back in B2/#5.
 include(":feature:import", ":feature:transcript")
 include(":engine:llm")

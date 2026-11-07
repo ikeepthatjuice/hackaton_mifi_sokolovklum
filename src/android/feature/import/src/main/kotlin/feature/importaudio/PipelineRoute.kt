@@ -31,6 +31,7 @@ internal class PipelineViewModel(pipeline: TranscriptionPipeline) : ViewModel() 
 fun PipelineRoute(
     pipeline: TranscriptionPipeline,
     modifier: Modifier = Modifier,
+    onHistory: (() -> Unit)? = null,
     resultContent: @Composable (TranscriptResult, () -> Unit) -> Unit,
 ) {
     val factory = remember(pipeline) {
@@ -64,6 +65,7 @@ fun PipelineRoute(
                     pipeline = pipeline,
                     onJobStarted = {},
                     onStartAudio = owner::start,
+                    onHistory = onHistory,
                 )
             }
         }

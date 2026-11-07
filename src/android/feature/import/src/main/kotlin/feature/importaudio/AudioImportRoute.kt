@@ -30,6 +30,7 @@ fun AudioImportRoute(
     onJobStarted: (String) -> Unit,
     modifier: Modifier = Modifier,
     onStartAudio: ((String) -> Unit)? = null,
+    onHistory: (() -> Unit)? = null,
 ) {
     val context = LocalContext.current
     val scope = rememberCoroutineScope()
@@ -119,6 +120,7 @@ fun AudioImportRoute(
         modifier = modifier,
         errorMessage = pickerError ?: controller.errorMessage,
         busy = picking || readingSelection || starting || controller.jobId != null,
+        onHistory = onHistory,
     )
 }
 

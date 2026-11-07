@@ -24,6 +24,7 @@ fun ImportScreen(
     modifier: Modifier = Modifier,
     errorMessage: String? = null,
     busy: Boolean = false,
+    onHistory: (() -> Unit)? = null,
 ) {
     Column(
         modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -32,6 +33,7 @@ fun ImportScreen(
         Text("Нейро-стенографист", style = MaterialTheme.typography.headlineMedium)
         Text("Выберите аудио. Приложение покажет реплики, говорящих и время.")
         Text("Обработка выполняется на устройстве без интернета.")
+        if (onHistory != null) OutlinedButton(onClick = onHistory, enabled = !busy) { Text("История") }
         OutlinedButton(onClick = onChooseAudio, enabled = !busy, modifier = Modifier.fillMaxWidth()) {
             Text(if (selectedAudioName == null) "Выбрать аудио" else "Выбрать другой файл")
         }

@@ -6,6 +6,7 @@ import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.remember
 import app.frontdebug.ObservedDebugPipeline
+import app.frontdebug.FakeTranscriptHistory
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import com.neurostenographer.app.di.rememberAppGraph
@@ -14,11 +15,12 @@ import com.neurostenographer.app.di.rememberAppGraph
 internal fun AppContent() {
     val graph = rememberAppGraph()
     val observedPipeline = remember(graph.pipeline) { ObservedDebugPipeline(graph.pipeline) }
+    val debugHistory = remember { if (BuildConfig.REAL_ENGINES) null else FakeTranscriptHistory() }
     Column {
         Text(
-            "DEBUG · Настоящие импорт и экспорт. Движки синтетические, модели не запускались.",
+            "DEBUG · Настоящие импорт и экспорт. Движки синтетические, модели не запускались. История — фейк в памяти.",
             modifier = Modifier.padding(16.dp),
         )
-        AppFlow(observedPipeline, graph.exporter, Modifier.weight(1f))
+        AppFlow(observedPipeline, graph.exporter, Modifier.weight(1f), history = debugHistory)
     }
 }

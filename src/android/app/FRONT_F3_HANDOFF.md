@@ -27,7 +27,7 @@ route передаёт Failed.requiredBytes, mapper обрабатывает typ
 
 Зависимости: требуются aliases androidx-lifecycle-viewmodel-ktx,
 androidx-lifecycle-viewmodel-compose, androidx-lifecycle-runtime-compose на существующем
-version.ref androidx-lifecycle (2.8.6). Back добавил их в #19; CI ветки ждёт merge #19 в main.
+version.ref androidx-lifecycle (2.8.6). Back добавил их в #19; #19 уже merged в main 477ce4c, origin/main влит в F3.
 Корневой каталог front не редактирует.
 
 Девять тестов PipelineSessionTest: повторный start, позднее состояние старого job,
@@ -45,6 +45,8 @@ Temurin JDK17 / SDK34; assembleDebug test lint assembleDebugAndroidTest — PASS
 отмена pipeline, повтор, recreate, JSON и запуск после Completed (движки только synthetic debug).
 Общий connectedDebugAndroidTest: app 5, audio 3, export 2, pipeline 5 — 15/15 PASS.
 Guard picker блокирует повторный launch; cancel снимает busy, launch-error отделён от selectionFailed.
-CI самого #14 красный до merge catalog #19 в main; Draft сохраняется.
-Back commits не включены в опубликованную front-ветку.
+После merge origin/main самостоятельные assembleDebug test lint в F3 — PASS.
+Актуальный штатный CI и состояние Draft фиксируются в описании #14.
+В опубликованную front-ветку попадают back-изменения только через принятую origin/main;
+непринятые back-ветки соединялись только в detached checkout для проверки.
 Reviewer: Ярик @lockermon4; интеграцию также передать «на ревью Claude» через него.

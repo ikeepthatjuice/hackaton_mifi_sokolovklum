@@ -79,10 +79,16 @@ sequenceDiagram
 
 | Компонент | Роль | Модель / Веса | Формат / Квантование | Размер | Хеш SHA-256 | Рантайм / Ревизия | Лицензия |
 |---|---|---|---|---|---|---|---|
-| **ASR** | Распознавание речи | `ggml-base.bin` *(multilingual)* | GGML FP16 | 148.0 МБ | `60ed5bc3dd14eea856493d334349b405782ddcaf00eec29073ba81a4d4ea8aec` | `whisper.cpp`<br>Tag `v1.7.1`<br>Commit `ebca09a3d1` | MIT |
-| **Diarization (Seg)** | Сегментация речи / VAD | `sherpa-onnx-pyannote-segmentation-3-0.onnx` | ONNX FP32 | 6.06 МБ | `893c52e411b439c2c8f85f3ce010a300da58908ec8e0f6c278fb7785beab4aa7` | `sherpa-onnx`<br>Release `v2.0.1` | MIT |
+| **ASR** | Распознавание речи | `ggml-base.bin` *(multilingual)* | GGML FP16 | 148.0 МБ | `60ed5bc3dd14eea856493d334349b405782ddcaf0028d4b5df4088345fba2efe` | `whisper.cpp`<br>Tag `v1.7.1`<br>Commit `ebca09a3d1` | MIT |
+| **Diarization (Seg)** | Сегментация речи / VAD | `sherpa-onnx-pyannote-segmentation-3-0.onnx` | ONNX FP32 | 5 992 913 байт | `220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079` | `sherpa-onnx`<br>Release `v2.0.1` | MIT |
 | **Diarization (Emb)** | Извлечение эмбеддингов спикеров | `3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx` | ONNX FP32 | 39.59 МБ | `1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b` | `sherpa-onnx`<br>Release `v2.0.1` | Apache-2.0 |
-| **LLM Postprocessor** | Расстановка знаков и регистра | `qwen3-0.6b-q4_k_m.gguf` | GGUF Q4_K_M | ~390 МБ | Фиксируется в `manifest.json` | `llama.cpp`<br>b3600+ | Apache-2.0 |
+| **LLM Postprocessor** | Расстановка знаков и регистра | `Qwen3-0.6B-Q4_K_M.gguf` | GGUF Q4_K_M, сторонняя квантовка prithivMLmods | 396704928 байт | `2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9` | `llama.cpp`, commit `954de248ac6907dd05dc19f0f511ab18f2807a54` | Apache-2.0 |
+
+### Происхождение LLM-весов
+
+Исходная модель — **Qwen3-0.6B**. GGUF Q4_K_M получен из **сторонней квантовки [prithivMLmods/Qwen3-0.6B-GGUF](https://huggingface.co/prithivMLmods/Qwen3-0.6B-GGUF/tree/3fa3255253c99e212675c0825241518cdba8e42c)**, а не из официального репозитория Qwen. Закреплённая ревизия — `3fa3255253c99e212675c0825241518cdba8e42c`, [файл-источник](https://huggingface.co/prithivMLmods/Qwen3-0.6B-GGUF/resolve/3fa3255253c99e212675c0825241518cdba8e42c/Qwen3_0.6B.Q4_K_M.gguf). Лицензия поставки зафиксирована как **Apache-2.0** в manifest/dependencies. Автор исходной модели и поставщик квантованного файла — разные участники.
+
+Авторитетный реестр файлов/хешей — [models/manifest.json](../models/manifest.json); LLM-runtime и источник квантовки — [dependencies.json](../src/android/engine/llm/dependencies.json). Веса не коммитятся. Замеры и текущие ограничения — [A51_LLM_CHECKPOINT.md](A51_LLM_CHECKPOINT.md) и [LLM_KV_PERFORMANCE.md](LLM_KV_PERFORMANCE.md).
 
 > **Лицензионная чистота:** Все используемые компоненты распространяются под открытыми коммерчески применимыми лицензиями (MIT и Apache-2.0). Модели не имеют запретов на оффлайн-дистрибуцию внутри приложения.
 

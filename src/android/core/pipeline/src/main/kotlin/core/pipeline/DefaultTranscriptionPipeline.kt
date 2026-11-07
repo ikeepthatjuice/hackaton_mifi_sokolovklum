@@ -7,6 +7,7 @@ import core.contracts.PipelineState
 import core.contracts.Stage
 import core.contracts.TranscriptResult
 import core.contracts.TranscriptionPipeline
+import core.contracts.Utterance
 import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
@@ -21,7 +22,10 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.withTimeoutOrNull
+import kotlinx.coroutines.cancelAndJoin
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
+import kotlinx.coroutines.selects.select
 import kotlinx.coroutines.sync.Mutex
 import kotlinx.coroutines.sync.withLock
 import java.io.File
@@ -39,6 +43,7 @@ import java.util.concurrent.ConcurrentHashMap
  * - `jobsDir/<jobId>/` is deleted after Completed, Failed or Cancelled.
  *
  * @param prepareAudio usually `AudioPreparer::prepare`; writes PCM under `jobsDir/<jobId>/`.
+ * @param awaitModels waits for the app-start model copy (assets → filesDir); the job stays in IMPORT meanwhile.
  */
 class DefaultTranscriptionPipeline(
     private val prepareAudio: suspend (audioUri: String, jobId: String) -> AudioInput,
@@ -46,6 +51,7 @@ class DefaultTranscriptionPipeline(
     private val engines: PipelineEngines,
     private val modelStore: ModelStore,
     dispatcher: CoroutineDispatcher,
+    private val awaitModels: suspend () -> Unit = {},
 ) : TranscriptionPipeline {
 
     private val scope = CoroutineScope(SupervisorJob() + dispatcher)
@@ -89,6 +95,7 @@ class DefaultTranscriptionPipeline(
 
     private suspend fun run(jobId: String, audioUri: String, state: MutableStateFlow<PipelineState>) {
         try {
+            awaitModels() // state is still Running(IMPORT)
             state.value = PipelineState.Running(Stage.DECODE, null)
             val audio = prepareAudio(audioUri, jobId)
 
@@ -107,13 +114,30 @@ class DefaultTranscriptionPipeline(
             var warnings = emptyList<String>()
             val raw = { utterances.map { it.copy(displayText = it.rawText) } }
             val processed = try {
-                val withinBudget = stage(engines.postprocessor, suppressCloseErrors = false) { processor ->
-                    withTimeoutOrNull(budgetMs) { engineCall { processor.process(utterances) } }
+                // Budget = max(30% of audio, one portion): the first portion always finishes; later portions
+                // run only while the budget lasts. Finished portions are kept, the rest stay raw.
+                val done = stage(engines.postprocessor, suppressCloseErrors = false) { processor ->
+                    val done = ArrayList<Utterance>(utterances.size)
+                    val portions = utterances.chunked(POSTPROCESS_PORTION)
+                    coroutineScope {
+                        val budget = launch { delay(budgetMs) } // generation clock starts with the first portion
+                        portions.firstOrNull()?.let { done += engineCall { processor.process(it) } }
+                        val rest = launch { for (portion in portions.drop(1)) done += engineCall { processor.process(portion) } }
+                        select<Unit> {
+                            rest.onJoin {}
+                            budget.onJoin { rest.cancelAndJoin() }
+                        }
+                        budget.cancel()
+                    }
+                    done
                 }
-                if (withinBudget == null) {
-                    warnings = listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.")
-                    raw()
-                } else withinBudget
+                val total = utterances.size
+                warnings = when (done.size) {
+                    total -> emptyList()
+                    0 -> listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст.")
+                    else -> listOf("Пунктуация и регистр обработаны в ${done.size} из $total реплик: исчерпан лимит времени LLM. Остальные — исходный текст.")
+                }
+                done + raw().drop(done.size)
             } catch (failure: Throwable) {
                 // User/job cancellation always wins; an engine-internal cancellation is an LLM error.
                 currentCoroutineContext().ensureActive()
@@ -174,6 +198,11 @@ class DefaultTranscriptionPipeline(
 
     private fun PipelineState.isFinal() =
         this is PipelineState.Completed || this is PipelineState.Failed || this is PipelineState.Cancelled
+
+    private companion object {
+        /** Utterances per LLM call: small enough to keep progress on timeout, large enough for batching. */
+        const val POSTPROCESS_PORTION = 4
+    }
 
     private fun deleteJobDir(jobId: String) {
         File(jobsDir, jobId).deleteRecursively()

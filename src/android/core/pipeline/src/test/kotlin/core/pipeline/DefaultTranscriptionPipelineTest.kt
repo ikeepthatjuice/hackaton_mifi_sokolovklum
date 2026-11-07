@@ -1,8 +1,10 @@
 package core.pipeline
 
 import core.audio.AudioPreparationException
+import core.contracts.AsrWord
 import core.contracts.PipelineError
 import core.contracts.PipelineState
+import core.contracts.SpeakerTurn
 import core.contracts.Stage
 import kotlinx.coroutines.test.StandardTestDispatcher
 import kotlinx.coroutines.test.TestScope
@@ -24,7 +26,7 @@ class DefaultTranscriptionPipelineTest {
     private lateinit var world: FakeWorld
     private lateinit var models: FakeModelStore
 
-    private fun TestScope.pipeline(): DefaultTranscriptionPipeline {
+    private fun TestScope.pipeline(awaitModels: suspend () -> Unit = {}): DefaultTranscriptionPipeline {
         world = FakeWorld(tmp.newFolder())
         models = FakeModelStore(tmp.newFolder())
         return DefaultTranscriptionPipeline(
@@ -33,6 +35,7 @@ class DefaultTranscriptionPipelineTest {
             engines = fakeEngines(world),
             modelStore = models,
             dispatcher = StandardTestDispatcher(testScheduler),
+            awaitModels = awaitModels,
         )
     }
 
@@ -51,6 +54,30 @@ class DefaultTranscriptionPipelineTest {
         assertEquals(listOf("привет", "здравствуйте"), state.result.utterances.map { it.rawText })
         assertEquals(listOf("Привет.", "Здравствуйте."), state.result.utterances.map { it.displayText })
         assertFalse(jobDir(id).exists())
+    }
+
+    @Test
+    fun jobWaitsForModelCopyInImportThenRuns() = runTest {
+        val copied = kotlinx.coroutines.CompletableDeferred<Unit>()
+        val p = pipeline(awaitModels = { copied.await() })
+        val id = p.start("content://synthetic/1")
+        advanceUntilIdle()
+        assertEquals(PipelineState.Running(Stage.IMPORT, null), p.observe(id).value)
+        assertEquals(emptyList<String>(), world.loadOrder)
+
+        copied.complete(Unit)
+        advanceUntilIdle()
+        assertTrue(p.observe(id).value is PipelineState.Completed)
+    }
+
+    @Test
+    fun cancelWhileWaitingForModelsIsCancelled() = runTest {
+        val p = pipeline(awaitModels = { kotlinx.coroutines.awaitCancellation() })
+        val id = p.start("content://synthetic/1")
+        advanceUntilIdle()
+        p.cancel(id)
+        advanceUntilIdle()
+        assertEquals(PipelineState.Cancelled, p.observe(id).value)
     }
 
     @Test
@@ -229,18 +256,54 @@ class DefaultTranscriptionPipelineTest {
         assertEquals(PipelineState.Failed(PipelineError.OUT_OF_MEMORY), p.observe(id).value)
     }
 
+    // 6 utterances → portions of 4 + 2. Fakes take 5000 ms audio, so the budget is 1500 ms.
+    private fun sixUtterances() {
+        world.turns = (0 until 6).map { SpeakerTurn("speaker_${it % 2 + 1}", it * 800L, it * 800L + 800L) }
+        world.words = (0 until 6).map { AsrWord("слово$it", it * 800L + 100L, it * 800L + 500L) }
+    }
+
     @Test
     fun postprocessDeadlineCompletesWithRawTextAndWarningAndReleasesModel() = runTest {
         val p = pipeline()
-        world.hangAt = Stage.POSTPROCESS
+        sixUtterances()
+        world.generationDelayMs = 2000L // first portion alone outlasts the 1500 ms budget
         val id = p.start("content://synthetic/deadline")
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
-        assertEquals(1500L, testScheduler.currentTime) // 30% of 5000 ms audio
-        assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
-        assertEquals(listOf("Пунктуация и регистр не обработаны: исчерпан лимит времени LLM. Показан исходный текст."), completed.result.warnings)
+        assertEquals(2000L, testScheduler.currentTime) // first portion finished, the rest was cut at once
+        assertEquals("budget expired during the first portion: no second call", listOf(4), world.postprocessCalls)
+        assertEquals(listOf("Слово0.", "Слово1.", "Слово2.", "Слово3.", "слово4", "слово5"), completed.result.utterances.map { it.displayText })
+        assertEquals(listOf("Пунктуация и регистр обработаны в 4 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), completed.result.warnings)
         assertEquals(0, world.loadedNow)
         assertFalse(jobDir(id).exists())
+    }
+
+    @Test
+    fun firstPortionAlwaysFinishesEvenOverBudget() = runTest {
+        val p = pipeline()
+        world.generationDelayMs = 5000L // 2 utterances = one portion, well over the 1500 ms budget
+        val id = p.start("content://synthetic/one-portion")
+        advanceUntilIdle()
+        val completed = p.observe(id).value as PipelineState.Completed
+        assertEquals(listOf("Привет.", "Здравствуйте."), completed.result.utterances.map { it.displayText })
+        assertTrue(completed.result.warnings.isEmpty())
+        assertEquals(0, world.loadedNow)
+    }
+
+    @Test
+    fun budgetTimeoutKeepsFinishedPortionsAndCountsThem() = runTest {
+        val p = pipeline()
+        sixUtterances()
+        world.generationDelayMs = 1000L // first portion ends at 1000 ms, the second is cut at 1500 ms
+        val id = p.start("content://synthetic/portions")
+        advanceUntilIdle()
+
+        val result = (p.observe(id).value as PipelineState.Completed).result
+        assertEquals(1500L, testScheduler.currentTime)
+        assertEquals(listOf(4, 2), world.postprocessCalls)
+        assertEquals(listOf("Слово0.", "Слово1.", "Слово2.", "Слово3.", "слово4", "слово5"), result.utterances.map { it.displayText })
+        assertEquals(listOf("Пунктуация и регистр обработаны в 4 из 6 реплик: исчерпан лимит времени LLM. Остальные — исходный текст."), result.warnings)
+        assertEquals(0, world.loadedNow)
     }
 
     @Test
@@ -263,13 +326,14 @@ class DefaultTranscriptionPipelineTest {
         val p = pipeline()
         models.llmDelayMs = 2000L
         world.llmLoadDelayMs = 3000L
-        world.hangAt = Stage.POSTPROCESS
+        sixUtterances()
+        world.generationDelayMs = 2000L
         val id = p.start("content://synthetic/slow-load-timeout")
         advanceUntilIdle()
         val completed = p.observe(id).value as PipelineState.Completed
-        assertEquals(6500L, testScheduler.currentTime)
-        assertTrue(completed.result.utterances.all { it.displayText == it.rawText })
-        assertTrue(completed.result.warnings.single().contains("лимит времени"))
+        assertEquals(7000L, testScheduler.currentTime) // 2000 copy + 3000 load + 2000 first portion
+        assertEquals(listOf("слово4", "слово5"), completed.result.utterances.drop(4).map { it.displayText })
+        assertTrue(completed.result.warnings.single().contains("4 из 6"))
         assertEquals(0, world.loadedNow)
     }
 

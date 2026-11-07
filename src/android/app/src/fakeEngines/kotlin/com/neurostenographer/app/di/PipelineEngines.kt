@@ -15,9 +15,10 @@ import kotlinx.coroutines.delay
 /**
  * Debug only: synthetic engines so the UI can run the whole flow (real decode via AudioPreparer,
  * states, cancel, export) without model weights. Output is fixed placeholder text, never case data.
- * Never in release: src/release has its own pipelineEngines().
+ * Debug builds without -PrealEngines; release and `-PrealEngines` use src/realEngines.
  */
-internal fun pipelineEngines() = PipelineEngines(
+@Suppress("UNUSED_PARAMETER") // same signature as src/realEngines
+internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
     diarization = EngineSpec(emptyList()) { SyntheticDiarization },
     asr = EngineSpec(emptyList()) { SyntheticAsr },
     aligner = SyntheticAligner,

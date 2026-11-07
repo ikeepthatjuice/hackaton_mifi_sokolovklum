@@ -17,9 +17,10 @@ data class SherpaOnnxDiarizationConfig(
     val segmentationModelPath: String = "models/sherpa-onnx-pyannote-segmentation-3-0.onnx",
     val embeddingModelPath: String = "models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
     val baseDir: File? = null,
-    val clusteringThreshold: Float = 0.6f,
-    val minSpeechDurationMs: Long = 250L,
+    val clusteringThreshold: Float = 0.75f,
+    val minSpeechDurationMs: Long = 500L,
     val minSilenceDurationMs: Long = 500L,
+    val minSpeakerTotalDurationMs: Long = 2000L,
     val isFloat32Pcm: Boolean = true
 )
 
@@ -167,15 +168,62 @@ class SherpaOnnxDiarizationEngine(
     ): List<SpeakerTurn> {
         if (segments.isEmpty()) return emptyList()
 
-        val sortedSegments = segments.sortedBy { it.startMs }
+        // 1. Sanitize boundaries and sort chronologically
+        val validSegments = segments.mapNotNull { seg ->
+            val safeStart = seg.startMs.coerceAtLeast(0L)
+            val safeEnd = seg.endMs.coerceAtLeast(safeStart + 1L).coerceAtMost(maxDurationMs)
+            if (safeStart < safeEnd) {
+                seg.copy(startMs = safeStart, endMs = safeEnd)
+            } else null
+        }.sortedBy { it.startMs }
+
+        if (validSegments.isEmpty()) return emptyList()
+
+        // 2. Calculate total speaking duration per cluster
+        val clusterDurations = mutableMapOf<Int, Long>()
+        for (seg in validSegments) {
+            val dur = seg.endMs - seg.startMs
+            clusterDurations[seg.clusterId] = clusterDurations.getOrDefault(seg.clusterId, 0L) + dur
+        }
+
+        // 3. Identify significant clusters (total speech >= minSpeakerTotalDurationMs, e.g. 2000 ms)
+        val significantClusters = clusterDurations.filter { it.value >= config.minSpeakerTotalDurationMs }.keys
+        val targetClusters = if (significantClusters.isEmpty()) {
+            val dominant = clusterDurations.maxByOrNull { it.value }?.key
+            if (dominant != null) setOf(dominant) else clusterDurations.keys
+        } else {
+            significantClusters
+        }
+
+        // 4. Reassign micro-clusters (< 2s speech) to the temporally nearest significant cluster
+        val remappedSegments = validSegments.map { seg ->
+            if (seg.clusterId in targetClusters) {
+                seg
+            } else {
+                val nearest = validSegments
+                    .filter { it.clusterId in targetClusters }
+                    .minByOrNull { other ->
+                        if (seg.startMs >= other.endMs) {
+                            seg.startMs - other.endMs
+                        } else if (other.startMs >= seg.endMs) {
+                            other.startMs - seg.endMs
+                        } else {
+                            0L
+                        }
+                    }
+                if (nearest != null) {
+                    seg.copy(clusterId = nearest.clusterId)
+                } else {
+                    seg
+                }
+            }
+        }
+
+        // 5. Stable assignment: speaker_1, speaker_2... by order of first appearance
         val clusterToSpeakerId = mutableMapOf<Int, String>()
         val turns = mutableListOf<SpeakerTurn>()
 
-        for (seg in sortedSegments) {
-            val safeStart = seg.startMs.coerceAtLeast(0L)
-            val safeEnd = seg.endMs.coerceAtLeast(safeStart + 1L).coerceAtMost(maxDurationMs)
-            if (safeStart >= safeEnd) continue
-
+        for (seg in remappedSegments) {
             val speakerId = clusterToSpeakerId.getOrPut(seg.clusterId) {
                 "speaker_${clusterToSpeakerId.size + 1}"
             }
@@ -183,8 +231,8 @@ class SherpaOnnxDiarizationEngine(
             turns.add(
                 SpeakerTurn(
                     speakerId = speakerId,
-                    startMs = safeStart,
-                    endMs = safeEnd
+                    startMs = seg.startMs,
+                    endMs = seg.endMs
                 )
             )
         }

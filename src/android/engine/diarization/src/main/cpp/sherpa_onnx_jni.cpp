@@ -34,22 +34,22 @@ Java_engine_diarization_SherpaOnnxNative_initDiarization(
 
     // Segmentation (Pyannote)
     config.segmentation.pyannote.model = segPath;
-    config.segmentation.num_threads = 2;
+    config.segmentation.num_threads = 4;
     config.segmentation.debug = 0;
     config.segmentation.provider = "cpu";
 
     // Embedding (3D-Speaker / ERes2Net)
     config.embedding.model = embPath;
-    config.embedding.num_threads = 2;
+    config.embedding.num_threads = 4;
     config.embedding.debug = 0;
     config.embedding.provider = "cpu";
 
     // Clustering
     config.clustering.num_clusters = -1; // Dynamic clustering
-    config.clustering.threshold = (jClusteringThreshold > 0.0f) ? jClusteringThreshold : 0.6f;
+    config.clustering.threshold = (jClusteringThreshold > 0.0f) ? jClusteringThreshold : 0.75f;
 
     // Thresholds (converted from ms to seconds)
-    config.min_duration_on = (jMinSpeechDurationMs > 0) ? (static_cast<float>(jMinSpeechDurationMs) / 1000.0f) : 0.25f;
+    config.min_duration_on = (jMinSpeechDurationMs > 0) ? (static_cast<float>(jMinSpeechDurationMs) / 1000.0f) : 0.5f;
     config.min_duration_off = (jMinSilenceDurationMs > 0) ? (static_cast<float>(jMinSilenceDurationMs) / 1000.0f) : 0.5f;
 
     const SherpaOnnxOfflineSpeakerDiarization *diarizer =

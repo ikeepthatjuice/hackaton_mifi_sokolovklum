@@ -73,6 +73,30 @@ class LocalTranscriptPostprocessorTest {
         assertNotEquals(input.rawText,output.single().displayText)
     }
 
+    @Test fun defaultSplitsAt150AndValidatesWholeReassembledUtterance() = runBlocking {
+        val input = row("мы не переносим встречу нужно 12 папок ".repeat(20).trimEnd())
+        val packets = mutableListOf<String>()
+        val output = LocalTranscriptPostprocessor(TextGenerator { packet, _ ->
+            packets += packet
+            packet.trimEnd() + "."
+        }).process(listOf(input)).single()
+        assertTrue(packets.size > 1)
+        assertTrue(packets.all { it.length <= 150 })
+        assertEquals(input, output.copy(displayText = input.displayText))
+        assertTrue(TranscriptValidator().validate(listOf(input), listOf(output)).accepted)
+        assertNotEquals(input.rawText, output.displayText)
+    }
+
+    @Test fun oneBadChunkRollsBackWholeUtteranceAfterJoining() = runBlocking {
+        val input = row("мы не переносим встречу нужно 12 папок ".repeat(20).trimEnd())
+        var calls = 0
+        val output = LocalTranscriptPostprocessor(TextGenerator { packet, _ ->
+            if (++calls == 2) packet.replace("не ", "") else packet.trimEnd() + "."
+        }).process(listOf(input)).single()
+        assertTrue(calls > 1)
+        assertEquals(input.copy(displayText = input.rawText), output)
+    }
+
     @Test fun unbrokenOverlongInputFailsWithoutInference() = runBlocking {
         val engine=LocalTranscriptPostprocessor(TextGenerator { _, _ -> error("must not invoke") },maxChunkChars=32)
         try { engine.process(listOf(row("а".repeat(100))));fail("limit") }

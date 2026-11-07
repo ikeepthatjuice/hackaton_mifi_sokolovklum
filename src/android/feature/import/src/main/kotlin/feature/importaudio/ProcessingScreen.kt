@@ -26,6 +26,7 @@ fun ProcessingScreen(
     onCancel: () -> Unit,
     modifier: Modifier = Modifier,
     cancellationRequested: Boolean = false,
+    llmProgress: LlmProgress? = null,
 ) {
     Column(
         modifier = modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(24.dp),
@@ -39,6 +40,7 @@ fun ProcessingScreen(
             modifier = Modifier.semantics { liveRegion = LiveRegionMode.Polite },
         )
         Text("Время обработки зависит от длительности записи и устройства.")
+        if (llmProgress != null && !cancellationRequested) Text("${llmProgress.completed} из ${llmProgress.total}")
         OutlinedButton(
             onClick = onCancel,
             enabled = !cancellationRequested,

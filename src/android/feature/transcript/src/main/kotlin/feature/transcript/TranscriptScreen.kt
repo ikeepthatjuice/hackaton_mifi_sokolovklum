@@ -9,13 +9,16 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Button
 import androidx.compose.material3.Card
+import androidx.compose.material3.CardDefaults
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.unit.dp
 import core.contracts.TranscriptResult
+import core.contracts.Utterance
 
 /** Displays the shared result without changing text, speaker IDs or times. */
 @Composable
@@ -27,6 +30,9 @@ fun TranscriptScreen(
     exportAvailable: Boolean = false,
     exportInProgress: Boolean = false,
     exportMessage: String? = null,
+    headerActions: (@Composable () -> Unit)? = null,
+    onPlayUtterance: ((Utterance) -> Unit)? = null,
+    playingUtteranceId: String? = null,
 ) {
     LazyColumn(
         modifier = modifier.fillMaxSize().padding(horizontal = 24.dp),
@@ -40,6 +46,7 @@ fun TranscriptScreen(
             )
         }
         item { Text("Реплик: ${result.utterances.size}") }
+        if (headerActions != null) item { headerActions() }
         if (result.warnings.isNotEmpty()) {
             item { Text(result.warnings.joinToString("\n")) }
         }
@@ -64,13 +71,19 @@ fun TranscriptScreen(
             item { Text("Речь в записи не обнаружена") }
         }
         items(result.utterances, key = { it.id }) { utterance ->
-            Card(modifier = Modifier.fillMaxWidth()) {
+            Card(modifier = Modifier.fillMaxWidth(), colors = CardDefaults.cardColors(
+                containerColor = if (playingUtteranceId == utterance.id) MaterialTheme.colorScheme.secondaryContainer
+                    else MaterialTheme.colorScheme.surfaceVariant,
+            )) {
                 Column(
                     modifier = Modifier.padding(16.dp),
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                 ) {
                     Text(utterance.speakerId, style = MaterialTheme.typography.titleMedium)
-                    Text("${formatTimestamp(utterance.startMs)} — ${formatTimestamp(utterance.endMs)}")
+                    val timestamp = "${formatTimestamp(utterance.startMs)} — ${formatTimestamp(utterance.endMs)}"
+                    if (onPlayUtterance == null) Text(timestamp)
+                    else TextButton(onClick = { onPlayUtterance(utterance) }) { Text(timestamp) }
+                    if (playingUtteranceId == utterance.id) Text("Воспроизводится")
                     Text(utterance.displayText)
                 }
             }

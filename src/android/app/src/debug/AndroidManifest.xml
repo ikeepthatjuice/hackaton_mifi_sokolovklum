@@ -3,5 +3,6 @@
     <application>
         <!-- Layout-only synthetic UX host, never included in release. -->
         <activity android:name="app.frontdebug.FrontUxPreviewActivity" android:exported="false" />
+        <activity android:name="app.frontdebug.FrontDemoPreviewActivity" android:exported="false" />
     </application>
 </manifest>

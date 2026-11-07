@@ -5,6 +5,11 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.setValue
+import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.ui.Modifier
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
@@ -29,6 +34,7 @@ fun TranscriptExportRoute(
     exporter: TranscriptExporter,
     onChooseAnotherAudio: () -> Unit,
     modifier: Modifier = Modifier,
+    playbackFactory: ((TranscriptResult) -> TranscriptPlayback)? = null,
 ) {
     val factory = remember(exporter) {
         object : ViewModelProvider.Factory {
@@ -38,6 +44,10 @@ fun TranscriptExportRoute(
     }
     val owner: JsonExportViewModel = viewModel(key = "export:${result.jobId}", factory = factory)
     val ui by owner.session.state.collectAsStateWithLifecycle()
+    val player = remember(result.jobId, playbackFactory) { playbackFactory?.invoke(result) }
+    val playingId = player?.playingId?.collectAsStateWithLifecycle()?.value
+    var playbackError by remember(result.jobId) { mutableStateOf<String?>(null) }
+    DisposableEffect(player) { onDispose { player?.close() } }
     val picker = rememberLauncherForActivityResult(ActivityResultContracts.CreateDocument("application/json")) {
         owner.session.destinationSelected(it?.toString())
     }
@@ -57,5 +67,17 @@ fun TranscriptExportRoute(
         exportAvailable = true,
         exportInProgress = ui.phase == ExportPhase.PICKING || ui.phase == ExportPhase.SAVING,
         exportMessage = ui.message,
+        headerActions = {
+            TranscriptTextActions(result)
+            if (playingId != null) TextButton(onClick = { player?.stop() }) { Text("Остановить воспроизведение") }
+            playbackError?.let { Text(it) }
+        },
+        onPlayUtterance = player?.let { playback -> { row ->
+            playbackError = try {
+                if (playingId == row.id) playback.stop() else playback.play(row)
+                null
+            } catch (_: Exception) { "Не удалось воспроизвести фрагмент аудио." }
+        } },
+        playingUtteranceId = playingId,
     )
 }

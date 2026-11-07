@@ -19,6 +19,7 @@ import core.contracts.Stage
 import core.contracts.TranscriptResult
 import core.contracts.TranscriptionPipeline
 import kotlinx.coroutines.launch
+import kotlinx.coroutines.flow.StateFlow
 
 internal class PipelineViewModel(pipeline: TranscriptionPipeline) : ViewModel() {
     val session = PipelineSession(pipeline, viewModelScope)
@@ -31,6 +32,7 @@ internal class PipelineViewModel(pipeline: TranscriptionPipeline) : ViewModel() 
 fun PipelineRoute(
     pipeline: TranscriptionPipeline,
     modifier: Modifier = Modifier,
+    llmProgress: StateFlow<LlmProgress?>? = null,
     resultContent: @Composable (TranscriptResult, () -> Unit) -> Unit,
 ) {
     val factory = remember(pipeline) {
@@ -41,6 +43,7 @@ fun PipelineRoute(
     }
     val owner: PipelineViewModel = viewModel(key = "front-transcription", factory = factory)
     val ui by owner.session.state.collectAsStateWithLifecycle()
+    val counts = llmProgress?.collectAsStateWithLifecycle()?.value
     Column(modifier) {
         ui.actionError?.let { Text(it, modifier = Modifier.padding(16.dp)) }
         when (val state = ui.state) {
@@ -58,6 +61,7 @@ fun PipelineRoute(
                     stageLabel = if (state is PipelineState.Running) stageLabel(state.stage) else "Подготовка задачи…",
                     onCancel = owner.session::cancel,
                     cancellationRequested = ui.cancellationRequested,
+                    llmProgress = counts.takeIf { state is PipelineState.Running && state.stage == Stage.POSTPROCESS },
                 )
             } else {
                 AudioImportRoute(

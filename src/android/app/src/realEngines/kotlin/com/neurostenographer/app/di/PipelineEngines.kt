@@ -25,7 +25,8 @@ import kotlinx.coroutines.runBlocking
  */
 // asrLanguage: the app always uses "ru". GigaAM is Russian-only, so another language fails the job with ENGINE_FAILED.
 internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
-    diarization = diarizationSpec(),
+    // A51 sweep on a 2-voice Russian dialog: CAM++ @0.95 gives 2 speakers in 62 s (ERes2Net @0.75: 5 in 150 s).
+    diarization = diarizationSpec(threshold = 0.95f),
     asr = EngineSpec(GIGAAM) { (encoder, decoder, joiner, tokens) ->
         // A clear job error instead of a Russian model transcribing another language.
         if (asrLanguage != "ru") throw PipelineFailure(PipelineError.ENGINE_FAILED, detail = "ASR supports only ru, got $asrLanguage")
@@ -45,13 +46,10 @@ internal fun diarizationSpec(embedding: String = EMBEDDING, threshold: Float? = 
     }
 
 private const val SEGMENTATION = "sherpa-onnx-pyannote-segmentation-3-0.onnx"
-private const val EMBEDDING = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+private const val EMBEDDING = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
 
 /** Embedding models in models/manifest.json, by short name (diarization sweep in FullCycleTest). */
-internal val EMBEDDINGS = mapOf(
-    "eres2net" to EMBEDDING,
-    "campplus" to "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
-)
+internal val EMBEDDINGS = mapOf("campplus" to EMBEDDING)
 private const val LLM = "Qwen3-0.6B-Q4_K_M.gguf"
 private val GIGAAM = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt").map { "gigaam-v3-punct-$it" }
 

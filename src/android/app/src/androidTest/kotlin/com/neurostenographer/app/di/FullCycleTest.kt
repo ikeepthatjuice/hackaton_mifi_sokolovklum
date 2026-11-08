@@ -111,13 +111,16 @@ class FullCycleTest {
         val audio = File(target.getExternalFilesDir(null), requireNotNull(args.getString("audio")) { "needs -e audio" })
         val store = AssetModelStore(target)
         val input = AudioPreparer(target).prepare(Uri.fromFile(audio).toString(), jobId = "sweep")
-        for ((name, embedding) in EMBEDDINGS) for (threshold in listOf(0.75f, 0.85f, 0.95f)) {
+        val only = args.getString("emb") // e.g. campplus
+        val thresholds = args.getString("thresholds")?.split(',')?.map { it.trim().toFloat() } ?: listOf(0.75f, 0.85f, 0.95f)
+        for ((name, embedding) in EMBEDDINGS.filterKeys { only == null || it == only }) for (threshold in thresholds) {
             val spec = diarizationSpec(embedding, threshold)
             val started = SystemClock.elapsedRealtime()
             val engine = spec.load(spec.models.map { store.ensureModel(it) })
             val turns = try { engine.diarize(input) } finally { (engine as? AutoCloseable)?.close() }
             Log.i(TAG, "sweep emb=$name threshold=$threshold speakers=${turns.map { it.speakerId }.distinct().size} " +
                 "turns=${turns.size} ms=${SystemClock.elapsedRealtime() - started} audio_ms=${input.durationMs}")
+            Log.i(TAG, "sweep_turns emb=$name threshold=$threshold " + turns.joinToString(" ") { "${it.speakerId.removePrefix("speaker_")}:${it.startMs}-${it.endMs}" })
         }
     }
 

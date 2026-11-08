@@ -246,11 +246,20 @@ class GigaAmAsrEngine(
 
             val isSpacePrefixed = raw.startsWith('\u2581') || raw.startsWith(' ')
             val clean = raw.trimStart('\u2581', ' ')
-            val isPurePunctuation = clean.all { it in punctuationSet }
+            val isPurePunctuation = clean.isNotEmpty() && clean.all { it in punctuationSet }
 
             val nextTimeMs = if (i + 1 < tokens.size) tokens[i + 1].timestampMs else token.timestampMs + 200L
 
-            if (isPurePunctuation) {
+            if (clean.isEmpty()) {
+                // Standalone whitespace / BPE boundary token: marks boundary between words, never punctuation
+                if (current != null) {
+                    current.endMs = maxOf(current.endMs, token.timestampMs)
+                    if (current.text.isNotBlank()) {
+                        words.add(current)
+                    }
+                    current = null
+                }
+            } else if (isPurePunctuation) {
                 // Attach punctuation to the preceding word
                 if (current != null) {
                     current.text += clean

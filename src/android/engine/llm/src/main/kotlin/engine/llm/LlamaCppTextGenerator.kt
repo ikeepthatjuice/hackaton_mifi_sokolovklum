@@ -36,7 +36,7 @@ class LlamaCppTextGenerator(
         require(threads in 1..8)
     }
 
-    /** Eager checksum/native load for EngineSpec.load, before the generation timeout. */
+    /** Eager checksum, native load and fixed-prefix decode before the generation timeout. */
     suspend fun prepare() { withRuntime { } }
 
     override suspend fun generate(rawText: String, maxOutputTokens: Int): String {
@@ -103,6 +103,13 @@ class LlamaCppTextGenerator(
                 NativeBridge.load()
                 handle = NativeBridge.open(modelFile.absolutePath.toByteArray(Charsets.UTF_8))
                 if (handle == 0L) throw LlmException(LlmFailure.MODEL_LOAD)
+                try {
+                    NativeBridge.prime(handle, threads)
+                } catch (failure: Throwable) {
+                    NativeBridge.free(handle)
+                    handle = 0L
+                    throw failure
+                }
             }
             block()
         } } catch (cancelled: CancellationException) { throw cancelled }
@@ -130,6 +137,7 @@ class LlamaCppTextGenerator(
 internal object NativeBridge {
     fun load() = System.loadLibrary("transcript_llm")
     external fun open(path: ByteArray): Long
+    external fun prime(handle: Long, threads: Int)
     external fun generate(handle: Long, text: ByteArray, maxTokens: Int, threads: Int): ByteArray
     external fun resetCancellation(handle: Long)
     external fun cancel(handle: Long)

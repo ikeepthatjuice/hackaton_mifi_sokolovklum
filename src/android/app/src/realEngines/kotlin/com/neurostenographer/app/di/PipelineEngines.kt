@@ -1,5 +1,6 @@
 package com.neurostenographer.app.di
 
+import android.util.Log
 import com.neurostenographer.app.BuildConfig
 import core.contracts.AsrEngine
 import core.contracts.DiarizationEngine
@@ -15,6 +16,7 @@ import engine.diarization.SherpaOnnxDiarizationConfig
 import engine.diarization.SherpaOnnxDiarizationEngine
 import engine.llm.LlamaCppTextGenerator
 import engine.llm.LocalTranscriptPostprocessor
+import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.runBlocking
 
 /**
@@ -44,7 +46,19 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
     },
     aligner = TranscriptAlignerImpl(),
     postprocessor = EngineSpec(listOf(LLM)) { (model) ->
-        Postprocessor(LlamaCppTextGenerator(model, BuildConfig.LLM_SHA256))
+        val generator = LlamaCppTextGenerator(model, BuildConfig.LLM_SHA256)
+        // Warm the fixed prompt KV here: load runs before the LLM budget starts. A failed warm-up is not a
+        // job failure: generate() retries it inside the budget and the stage falls back to rawText as before.
+        try {
+            generator.prepare()
+        } catch (e: CancellationException) {
+            // load() has not returned ownership to stage(), so release here on cancellation.
+            generator.close()
+            throw e
+        } catch (e: Exception) {
+            Log.w("PipelineEngines", "LLM warm-up failed: ${e.javaClass.simpleName}")
+        }
+        Postprocessor(generator)
     },
 )
 

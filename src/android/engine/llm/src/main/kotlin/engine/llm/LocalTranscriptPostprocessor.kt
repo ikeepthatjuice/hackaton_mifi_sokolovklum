@@ -21,7 +21,7 @@ class LocalTranscriptPostprocessor(
 ) : TranscriptPostprocessor, AutoCloseable {
     companion object {
         /** Use from EngineSpec.load: preparation is outside the pipeline generation budget. */
-        suspend fun load(modelFile: java.io.File, expectedSha256: String, threads: Int = 4): LocalTranscriptPostprocessor {
+        suspend fun load(modelFile: java.io.File, expectedSha256: String, threads: Int = 3): LocalTranscriptPostprocessor {
             val runtime = LlamaCppTextGenerator(modelFile, expectedSha256, threads)
             try {
                 runtime.prepare()

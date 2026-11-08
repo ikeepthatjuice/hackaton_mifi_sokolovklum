@@ -34,13 +34,14 @@ Java_engine_diarization_SherpaOnnxNative_initDiarization(
 
     // Segmentation (Pyannote)
     config.segmentation.pyannote.model = segPath;
-    config.segmentation.num_threads = 4;
+    // A51: 3 threads, not 4 (4 threads on 3 available big cores contend: LLM gen 0.25 → 8.6 tok/s, diarization −12 s).
+    config.segmentation.num_threads = 3;
     config.segmentation.debug = 0;
     config.segmentation.provider = "cpu";
 
     // Embedding (3D-Speaker / ERes2Net)
     config.embedding.model = embPath;
-    config.embedding.num_threads = 4;
+    config.embedding.num_threads = 3;
     config.embedding.debug = 0;
     config.embedding.provider = "cpu";
 

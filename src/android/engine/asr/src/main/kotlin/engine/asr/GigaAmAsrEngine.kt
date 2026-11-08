@@ -31,7 +31,7 @@ data class GigaAmConfig(
     val tokensPath: String = "models/gigaam-v3-punct-tokens.txt",
     val baseDir: File? = null,
     val language: String = "ru",
-    val numThreads: Int = 4,
+    val numThreads: Int = 3, // A51: 3 threads beat 4 (4 threads on 3 available big cores contend).
     val maxChunkDurationMs: Long = 20_000L,
     val isFloat32Pcm: Boolean = true
 )

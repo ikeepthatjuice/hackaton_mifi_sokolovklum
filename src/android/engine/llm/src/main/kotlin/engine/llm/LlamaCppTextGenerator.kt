@@ -22,7 +22,8 @@ import kotlinx.coroutines.sync.withLock
 class LlamaCppTextGenerator(
     private val modelFile: File,
     private val expectedSha256: String,
-    private val threads: Int = 4,
+    // A51: 3 threads, not 4 (4 threads on 3 available big cores contend: LLM gen 0.25 → 8.6 tok/s, diarization −12 s).
+    private val threads: Int = 3,
     // Opt-in diagnostic only. The dedicated spike passes fixed synthetic text;
     // production callers leave this null so transcripts never enter general logs.
     private val rawResponse: ((String) -> Unit)? = null,

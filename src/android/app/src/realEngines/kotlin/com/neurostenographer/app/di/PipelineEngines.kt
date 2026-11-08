@@ -31,6 +31,8 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
                 SherpaOnnxDiarizationConfig(
                     segmentationModelPath = segmentation.path,
                     embeddingModelPath = embedding.path,
+                    // A51 sweep on a 2-voice Russian dialog: CAM++ @0.95 gives 2 speakers in 62 s (ERes2Net @0.75: 5 in 150 s).
+                    clusteringThreshold = 0.95f,
                 ),
             ),
         )
@@ -47,7 +49,7 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
 )
 
 private const val SEGMENTATION = "sherpa-onnx-pyannote-segmentation-3-0.onnx"
-private const val EMBEDDING = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+private const val EMBEDDING = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
 private const val LLM = "Qwen3-0.6B-Q4_K_M.gguf"
 private val GIGAAM = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt").map { "gigaam-v3-punct-$it" }
 

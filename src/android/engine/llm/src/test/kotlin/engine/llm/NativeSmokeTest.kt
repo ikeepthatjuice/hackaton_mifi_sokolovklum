@@ -120,6 +120,49 @@ class NativeSmokeTest {
         } finally { runtime.close() }
     }
 
+    @Test fun interruptedPrefixPreparationCanBeRetriedWithoutLeakingCallback() {
+        val path = System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for prefix preparation", !path.isNullOrBlank())
+        NativeBridge.load()
+        val handle = NativeBridge.open(File(path!!).absolutePath.toByteArray())
+        try {
+            val aborted = java.util.concurrent.atomic.AtomicBoolean(false)
+            val thread = Thread {
+                Thread.currentThread().interrupt()
+                try { NativeBridge.prime(handle, 4) }
+                catch (_: IllegalStateException) { aborted.set(true) }
+                finally { Thread.interrupted() }
+            }
+            thread.start(); thread.join(30_000)
+            assertFalse("preparation thread stopped", thread.isAlive)
+            assertTrue("preparation honours cancellation", aborted.get())
+            NativeBridge.prime(handle, 4)
+            assertTrue(NativeBridge.generate(handle, "нет не 6".toByteArray(), 256, 4).isNotEmpty())
+        } finally { NativeBridge.free(handle) }
+    }
+
+    @Test fun warmedRussianPunctuationKeepsWordsAndMetadataOrFallsBack() = runBlocking {
+        val path = System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for Russian warmup regression", !path.isNullOrBlank())
+        val runtime = LlamaCppTextGenerator(File(path!!), MODEL_SHA)
+        val events = mutableListOf<PostprocessEvent>()
+        val processor = LocalTranscriptPostprocessor(runtime, diagnostic = { events.add(it) })
+        try {
+            runtime.prepare()
+            val samples = listOf("да", "нет", "Иван не придёт.", "Нужно 12 папок.",
+                "мы не переносим встречу нужно 12 папок", "Олег позвонит Марине в 15 часов.")
+            for ((i, text) in samples.withIndex()) {
+                val row = Utterance("synthetic_$i", "speaker_1", 0, 3000, text, text)
+                val result = processor.process(listOf(row)).single()
+                assertEquals(row, result.copy(displayText = row.displayText))
+                assertTrue(TranscriptValidator().validateText(text, result.displayText).accepted)
+            }
+            assertEquals(samples.size, events.count { it == PostprocessEvent.INFERENCE_COMPLETED })
+            println("Russian synthetic completed; samples=" + samples.size +
+                " rejectedFormats=" + events.count { it == PostprocessEvent.FORMAT_REJECTED })
+        } finally { processor.close() }
+    }
+
     companion object {
         // Q4 is the current default; do not silently verify a different model.
         private const val MODEL_SHA="2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9"

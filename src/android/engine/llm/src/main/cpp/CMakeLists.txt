@@ -45,6 +45,9 @@ if(NOT ANDROID)
     target_include_directories(transcript_llm PRIVATE ${JNI_INCLUDE_DIRS})
 endif()
 target_link_libraries(transcript_llm PRIVATE llama)
+if(ANDROID)
+    target_link_libraries(transcript_llm PRIVATE log) # LLM_DIAG
+endif()
 # Hide ALL bundled llama/ggml exports, including symbols with upstream visibility attributes.
 # whisper.cpp may carry a different ggml in another .so; expose only JNI entry points.
 if(ANDROID OR CMAKE_SYSTEM_NAME STREQUAL "Linux")

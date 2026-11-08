@@ -29,7 +29,7 @@ class SherpaOnDeviceTest {
             throw AssertionError(errorMsg)
         }
 
-        val embName = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
+        val embName = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
         val embFile = resolveOrExtractModel(testContext, appContext, embName)
         if (!embFile.exists() || embFile.length() == 0L) {
             val errorMsg = "MODEL_MISSING $embName"

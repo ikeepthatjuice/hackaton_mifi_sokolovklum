@@ -25,6 +25,7 @@ class FakeWorld(val jobsDir: File) {
     var onPostprocess: (() -> Unit)? = null
     var llmLoadDelayMs = 0L
     var generationDelayMs = 0L
+    var durationMs = 5000L
     var turns: List<SpeakerTurn>? = null // default: two speakers
     var words: List<AsrWord>? = null
     val postprocessCalls = mutableListOf<Int>() // utterances per call
@@ -49,7 +50,7 @@ class FakeWorld(val jobsDir: File) {
         val pcm = File(jobsDir, "$jobId/audio.f32").apply { parentFile!!.mkdirs(); writeBytes(ByteArray(16)) }
         audioFailure?.let { throw it }
         gate(Stage.DECODE)
-        return AudioInput(pcmFilePath = pcm.path, durationMs = 5000L)
+        return AudioInput(pcmFilePath = pcm.path, durationMs = durationMs)
     }
 }
 

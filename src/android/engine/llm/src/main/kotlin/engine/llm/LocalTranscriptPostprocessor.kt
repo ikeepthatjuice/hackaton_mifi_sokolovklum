@@ -13,7 +13,7 @@ enum class PostprocessEvent { INFERENCE_COMPLETED, FORMAT_REJECTED, INPUT_SKIPPE
 class LocalTranscriptPostprocessor(
     private val generator: TextGenerator,
     private val validator: TranscriptValidator = TranscriptValidator(),
-    private val maxChunkChars: Int = 400,
+    private val maxChunkChars: Int = 150,
     private val maxOutputTokens: Int = 512,
     private val diagnostic: (PostprocessEvent) -> Unit = {},
     private val maxBatchSize: Int = 12,
@@ -65,6 +65,8 @@ class LocalTranscriptPostprocessor(
             currentCoroutineContext().ensureActive()
             val batch = mutableListOf(work[cursor++])
             while (cursor < work.size && batch.size < maxBatchSize) {
+                // Do not undo the 150-char split by rebatching pieces of the same utterance.
+                if (work[cursor].row == batch.last().row) break
                 val candidate = batch + work[cursor]
                 if (BatchFormat.encode(candidate.map { it.raw }).length > maxBatchChars) break
                 batch.add(work[cursor++])

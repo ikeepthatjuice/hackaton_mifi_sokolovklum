@@ -3,12 +3,14 @@ package com.neurostenographer.app.di
 import com.neurostenographer.app.BuildConfig
 import core.contracts.AsrEngine
 import core.contracts.DiarizationEngine
+import core.contracts.PipelineError
 import core.contracts.TranscriptPostprocessor
 import core.pipeline.EngineSpec
+import core.pipeline.PipelineFailure
 import core.pipeline.PipelineEngines
 import engine.alignment.TranscriptAlignerImpl
-import engine.asr.WhisperAsrConfig
-import engine.asr.WhisperAsrEngine
+import engine.asr.GigaAmAsrEngine
+import engine.asr.GigaAmConfig
 import engine.diarization.SherpaOnnxDiarizationConfig
 import engine.diarization.SherpaOnnxDiarizationEngine
 import engine.llm.LlamaCppTextGenerator
@@ -21,7 +23,7 @@ import kotlinx.coroutines.runBlocking
  * and `load` gets those absolute paths. The pipeline loads each engine right before its stage and
  * closes it right after: sherpa → whisper → LLM, one model in memory at a time.
  */
-// asrLanguage: the app always uses "ru"; FullCycleTest passes "en" for the English jfk.wav sample.
+// asrLanguage: the app always uses "ru". GigaAM is Russian-only, so another language fails the job with ENGINE_FAILED.
 internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
     diarization = EngineSpec(listOf(SEGMENTATION, EMBEDDING)) { (segmentation, embedding) ->
         Diarization(
@@ -29,12 +31,16 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
                 SherpaOnnxDiarizationConfig(
                     segmentationModelPath = segmentation.path,
                     embeddingModelPath = embedding.path,
+                    // A51 sweep on a 2-voice Russian dialog: CAM++ @0.95 gives 2 speakers in 62 s (ERes2Net @0.75: 5 in 150 s).
+                    clusteringThreshold = 0.95f,
                 ),
             ),
         )
     },
-    asr = EngineSpec(listOf(WHISPER)) { (model) ->
-        Asr(WhisperAsrEngine(WhisperAsrConfig(modelPath = model.path, language = asrLanguage)))
+    asr = EngineSpec(GIGAAM) { (encoder, decoder, joiner, tokens) ->
+        // A clear job error instead of a Russian model transcribing another language.
+        if (asrLanguage != "ru") throw PipelineFailure(PipelineError.ENGINE_FAILED, detail = "ASR supports only ru, got $asrLanguage")
+        GigaAm(GigaAmAsrEngine(GigaAmConfig(encoder.path, decoder.path, joiner.path, tokens.path, language = asrLanguage)))
     },
     aligner = TranscriptAlignerImpl(),
     postprocessor = EngineSpec(listOf(LLM)) { (model) ->
@@ -43,16 +49,16 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
 )
 
 private const val SEGMENTATION = "sherpa-onnx-pyannote-segmentation-3-0.onnx"
-private const val EMBEDDING = "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx"
-private const val WHISPER = "ggml-base.bin"
+private const val EMBEDDING = "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx"
 private const val LLM = "Qwen3-0.6B-Q4_K_M.gguf"
+private val GIGAAM = listOf("encoder.int8.onnx", "decoder.onnx", "joiner.onnx", "tokens.txt").map { "gigaam-v3-punct-$it" }
 
 // Engines free native memory with release()/close(); the pipeline closes only AutoCloseable.
 private class Diarization(private val e: SherpaOnnxDiarizationEngine) : DiarizationEngine by e, AutoCloseable {
     override fun close() = e.release()
 }
 
-private class Asr(private val e: WhisperAsrEngine) : AsrEngine by e, AutoCloseable {
+private class GigaAm(private val e: GigaAmAsrEngine) : AsrEngine by e, AutoCloseable {
     override fun close() = e.release()
 }
 

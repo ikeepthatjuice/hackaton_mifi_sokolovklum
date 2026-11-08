@@ -158,21 +158,25 @@ class AudioPreparer(private val context: Context) {
 
             while (true) {
                 coroutineContext.ensureActive()
-                if (!inputDone) {
-                    val inIdx = codec.dequeueInputBuffer(TIMEOUT_US)
-                    if (inIdx >= 0) {
-                        val size = extractor.readSampleData(codec.getInputBuffer(inIdx)!!, 0)
-                        if (size < 0) {
-                            codec.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
-                            inputDone = true
-                        } else {
-                            codec.queueInputBuffer(inIdx, 0, size, extractor.sampleTime, 0)
-                            extractor.advance()
-                        }
+                // Fill every free input buffer without waiting: with one frame per round the decoder
+                // idled and each round waited TIMEOUT_US for output (~25 s on 73 s of AAC on A51).
+                var queued = false
+                while (!inputDone) {
+                    val inIdx = codec.dequeueInputBuffer(0)
+                    if (inIdx < 0) break
+                    val size = extractor.readSampleData(codec.getInputBuffer(inIdx)!!, 0)
+                    if (size < 0) {
+                        codec.queueInputBuffer(inIdx, 0, 0, 0, MediaCodec.BUFFER_FLAG_END_OF_STREAM)
+                        inputDone = true
+                    } else {
+                        codec.queueInputBuffer(inIdx, 0, size, extractor.sampleTime, 0)
+                        extractor.advance()
                     }
+                    queued = true
                 }
 
-                val outIdx = codec.dequeueOutputBuffer(info, TIMEOUT_US)
+                // Wait for output only when this round fed nothing; otherwise poll and go on feeding.
+                val outIdx = codec.dequeueOutputBuffer(info, if (queued) 0 else TIMEOUT_US)
                 when {
                     outIdx == MediaCodec.INFO_OUTPUT_FORMAT_CHANGED -> updateFormat(codec.outputFormat)
                     outIdx >= 0 -> {

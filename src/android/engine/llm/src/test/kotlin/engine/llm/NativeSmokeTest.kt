@@ -85,6 +85,41 @@ class NativeSmokeTest {
         } finally { runtime.close() }
     }
 
+    @Test fun atomicCancellationIsObservedBeforeNativeGenerationStarts() = runBlocking {
+        val path = System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for atomic cancellation", !path.isNullOrBlank())
+        NativeBridge.load()
+        val handle = NativeBridge.open(File(path!!).absolutePath.toByteArray(Charsets.UTF_8))
+        try {
+            NativeBridge.resetCancellation(handle)
+            NativeBridge.cancel(handle) // happens BEFORE entering JNI generate; must not be reset there
+            try { NativeBridge.generate(handle, "да".toByteArray(), 32, 4); fail("must abort") }
+            catch (_: IllegalStateException) { }
+            NativeBridge.resetCancellation(handle)
+            assertTrue(NativeBridge.generate(handle, "да".toByteArray(), 32, 4).isNotEmpty())
+        } finally { NativeBridge.free(handle) }
+    }
+
+    @Test fun timeoutJoinsAbortedNativeWorkerBeforeReuseAndClose() = runBlocking {
+        val path = System.getenv("LLM_SMOKE_MODEL")
+        assumeTrue("Set LLM_SMOKE_MODEL for timeout", !path.isNullOrBlank())
+        val runtime = LlamaCppTextGenerator(File(path!!), MODEL_SHA)
+        try {
+            runtime.prepare()
+            repeat(3) {
+                val start = System.nanoTime()
+                try {
+                    withTimeout(25) { runtime.generate("мы не переносим встречу ".repeat(30), 512) }
+                    fail("must time out")
+                } catch (_: TimeoutCancellationException) { }
+                val elapsedMs = (System.nanoTime() - start) / 1_000_000
+                assertTrue("native cancellation unwound in ${elapsedMs}ms", elapsedMs < 5000)
+                println("Atomic cancellation joined native worker; elapsedMs=$elapsedMs")
+                assertTrue(withTimeout(30_000) { runtime.generate("нет", 256) }.isNotBlank())
+            }
+        } finally { runtime.close() }
+    }
+
     companion object {
         // Q4 is the current default; do not silently verify a different model.
         private const val MODEL_SHA="2883b98c1396be553c252b27382cae54baad12b4087e6bec86af024bd412afa9"

@@ -1,6 +1,8 @@
 #include <jni.h>
 #include "llama.h"
+#include "generation_budget.h"
 #include <algorithm>
+#include <atomic>
 #include <climits>
 #include <memory>
 #include <mutex>
@@ -76,10 +78,15 @@ using Sampler = std::unique_ptr<llama_sampler, SamplerDeleter>;
 // Only fixed prompt tokens survive an invocation; no prior transcript is cached.
 struct Runtime {
     Model model;
+    std::atomic_bool cancelled{false};
     Context context;
     std::vector<llama_token> prefix;
     explicit Runtime(Model m) : model(std::move(m)) {}
 };
+
+static bool atomic_abort(void * data) {
+    return static_cast<Runtime *>(data)->cancelled.load(std::memory_order_relaxed);
+}
 
 // Never keep a callback pointing at an invocation-local InterruptCheck.
 // Any failure/abort invalidates the context, including a partially decoded prefix.
@@ -137,6 +144,7 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         auto * model = runtime ? runtime->model.get() : nullptr;
         if (!model || max_tokens < 32 || max_tokens > 1024 || threads < 1 || threads > 8)
             throw std::runtime_error("arguments");
+        if (atomic_abort(runtime)) throw std::runtime_error("cancelled");
         const auto text = bytes(env, text_bytes);
         if (text.size() > 4000) throw std::runtime_error("input limit");
         // Qwen3-0.6B GGUF tokenizer.chat_template: ChatML + empty think prefill
@@ -168,9 +176,13 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         while (stable < fixed.size() && stable < tokens.size() && fixed[stable] == tokens[stable]) ++stable;
         fixed.resize(stable);
         const int count = static_cast<int>(tokens.size());
+        // Count the actual INPUT packet, not system/examples/chat-template tokens.
+        const int input_count = -llama_tokenize(vocab, text.data(), static_cast<int32_t>(text.size()), nullptr, 0, false, false);
+        if (input_count <= 0) throw std::runtime_error("input tokenize");
+        // ceil(1.3 * input) + EOS, with a small floor for one-word replies.
+        max_tokens = generation_budget(input_count, max_tokens);
         constexpr int context_size = 2048;
         if (count + max_tokens >= context_size) throw std::runtime_error("context limit");
-        InterruptCheck interrupt(env);
         if (runtime->context && runtime->prefix != fixed) {
             // Scalar and batch examples differ: never reuse KV for a different prompt.
             runtime->context.reset(); runtime->prefix.clear();
@@ -188,9 +200,9 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         Invocation invocation{*runtime};
         auto * ctx = runtime->context.get();
         llama_set_n_threads(ctx, threads, threads);
-        llama_set_abort_callback(ctx, InterruptCheck::abort, &interrupt);
+        llama_set_abort_callback(ctx, atomic_abort, runtime);
         auto decode = [&](llama_token * data, int size) {
-            if (interrupt.interrupted()) throw std::runtime_error("cancelled");
+            if (atomic_abort(runtime)) throw std::runtime_error("cancelled");
             if (llama_decode(ctx, llama_batch_get_one(data, size)) != 0) throw std::runtime_error("decode");
         };
         if (runtime->prefix.empty()) {
@@ -207,7 +219,7 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         std::string output;
         bool finished = false;
         for (int i = 0; i < max_tokens; ++i) {
-            if (interrupt.interrupted()) {
+            if (atomic_abort(runtime)) {
                 fail(env, "java/lang/InterruptedException", "LLM cancelled");
                 return nullptr;
             }
@@ -239,6 +251,16 @@ extern "C" JNIEXPORT jbyteArray JNICALL Java_engine_llm_NativeBridge_generate(
         fail(env, "java/lang/IllegalStateException", "LLM inference failed");
         return nullptr;
     }
+}
+
+extern "C" JNIEXPORT void JNICALL Java_engine_llm_NativeBridge_resetCancellation(JNIEnv *, jobject, jlong handle) {
+    auto * runtime = reinterpret_cast<Runtime *>(handle);
+    if (runtime) runtime->cancelled.store(false, std::memory_order_relaxed);
+}
+
+extern "C" JNIEXPORT void JNICALL Java_engine_llm_NativeBridge_cancel(JNIEnv *, jobject, jlong handle) {
+    auto * runtime = reinterpret_cast<Runtime *>(handle);
+    if (runtime) runtime->cancelled.store(true, std::memory_order_relaxed);
 }
 
 extern "C" JNIEXPORT void JNICALL Java_engine_llm_NativeBridge_free(JNIEnv *, jobject, jlong handle) {

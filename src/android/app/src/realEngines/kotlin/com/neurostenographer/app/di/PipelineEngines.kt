@@ -31,8 +31,8 @@ internal fun pipelineEngines(asrLanguage: String = "ru") = PipelineEngines(
                 SherpaOnnxDiarizationConfig(
                     segmentationModelPath = segmentation.path,
                     embeddingModelPath = embedding.path,
-                    // A51 sweep on a 2-voice Russian dialog: CAM++ @0.95 gives 2 speakers in 62 s (ERes2Net @0.75: 5 in 150 s).
-                    clusteringThreshold = 0.95f,
+                    // A51 sweep: CAM++ 0.91–0.93 → 3 speakers on the Russian dialog (3 voices), 0.94+ → 2; A-B-C-A-D test: 3, A keeps its id.
+                    clusteringThreshold = 0.93f,
                 ),
             ),
         )

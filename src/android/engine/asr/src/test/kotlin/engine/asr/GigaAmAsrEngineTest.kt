@@ -164,6 +164,39 @@ class GigaAmAsrEngineTest {
     }
 
     @Test
+    fun `test mergeChunkWords discards suffix fragment of word across seam`() {
+        val engine = GigaAmAsrEngine()
+        // Reproduces FLEURS 10037 scenario: Chunk 1 transcribed "чужих работ", Chunk 2 hears acoustic suffix "их" at the boundary
+        val chunk1Words = listOf(
+            AsrWord(text = "контексте", startMs = 17000L, endMs = 17600L),
+            AsrWord(text = "чужих", startMs = 17700L, endMs = 18200L),
+            AsrWord(text = "работ", startMs = 18300L, endMs = 18800L)
+        )
+        val chunk2Words = listOf(
+            AsrWord(text = "их", startMs = 18100L, endMs = 18300L), // acoustic suffix fragment of "чужих"
+            AsrWord(text = "а", startMs = 18900L, endMs = 19100L),
+            AsrWord(text = "также", startMs = 19200L, endMs = 19800L)
+        )
+
+        val merged = engine.mergeChunkWords(
+            existingWords = chunk1Words,
+            newChunkWords = chunk2Words,
+            overlapStartMs = 17500L,
+            overlapEndMs = 18800L,
+            totalDurationMs = 27000L
+        )
+
+        assertEquals(5, merged.size)
+        assertEquals("контексте", merged[0].text)
+        assertEquals("чужих", merged[1].text)
+        assertEquals("работ", merged[2].text)
+        assertEquals("а", merged[3].text)
+        assertEquals("также", merged[4].text)
+        assertTrue(merged[3].startMs >= merged[2].endMs)
+        assertTrue(merged[4].startMs >= merged[3].endMs)
+    }
+
+    @Test
     fun `test chunk offset is applied to word timestamps`() {
         val engine = GigaAmAsrEngine()
         val tokens = listOf(

@@ -254,6 +254,22 @@ class GigaAmAsrEngine(
                     }
                     continue
                 }
+
+                // 3. Skip trailing/leading subword fragment of an already complete word in result
+                // (e.g. Chunk 1 transcribed "чужих", Chunk 2 hears acoustic suffix fragment "их" across the seam)
+                val fragmentOfCompleteWordIndex = result.indexOfLast { prev ->
+                    val prevNorm = normalize(prev.text)
+                    if (prevNorm.isNotEmpty() && currNorm.isNotEmpty() && prevNorm.length > currNorm.length) {
+                        val isSubword = prevNorm.endsWith(currNorm) || prevNorm.startsWith(currNorm)
+                        val isTemporallyNear = curr.startMs >= prev.startMs - 200L && curr.startMs <= prev.endMs + 300L
+                        isSubword && isTemporallyNear
+                    } else false
+                }
+
+                if (fragmentOfCompleteWordIndex != -1) {
+                    // Fragment of an already transcribed full word -> skip curr
+                    continue
+                }
             }
 
             // 3. New word: append with strictly monotonic timestamp enforcement

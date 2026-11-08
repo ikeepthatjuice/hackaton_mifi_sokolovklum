@@ -1,5 +1,5 @@
 {
-  "version": "2.4",
+  "version": "2.5",
   "updated_at": "2026-11-07",
   "models": [
     {
@@ -18,23 +18,6 @@
       "size_bytes": 5992913,
       "sha256": "220ad67ca923bef2fa91f2390c786097bf305bceb5e261d4af67b38e938e1079",
       "memory_ram_mb": 35
-    },
-    {
-      "name": "3dspeaker-eres2net-base",
-      "target_file": "3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
-      "relative_path": "models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
-      "role": "Diarization / Embedding",
-      "description": "3D-Speaker ERes2Net base speaker embedding extractor for offline diarization",
-      "runtime": "sherpa-onnx (ONNX Runtime)",
-      "runtime_version": "v2.0.1",
-      "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_eres2net_base_sv_zh-cn_3dspeaker_16k.onnx",
-      "license": "Apache-2.0",
-      "format": "ONNX",
-      "quantization": "FP32",
-      "input_format": "PCM mono 16000 Hz, float32 [-1.0, 1.0]",
-      "size_bytes": 39593761,
-      "sha256": "1a331345f04805badbb495c775a6ddffcdd1a732567d5ec8b3d5749e3c7a5e4b",
-      "memory_ram_mb": 45
     },
     {
       "name": "qwen3-0.6b-q4-k-m",
@@ -135,8 +118,8 @@
       "name": "3dspeaker-campplus-zh-en-advanced",
       "target_file": "3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
       "relative_path": "models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
-      "role": "Diarization / Embedding (candidate)",
-      "description": "3D-Speaker CAM++ zh+en speaker embedding extractor, candidate vs ERes2Net in the diarization sweep",
+      "role": "Diarization / Embedding",
+      "description": "3D-Speaker CAM++ zh+en speaker embedding extractor; chosen over ERes2Net by the A51 sweep (2 speakers, 2.4x faster)",
       "runtime": "sherpa-onnx (ONNX Runtime)",
       "runtime_version": "v2.0.1",
       "source_url": "https://github.com/k2-fsa/sherpa-onnx/releases/download/speaker-recongition-models/3dspeaker_speech_campplus_sv_zh_en_16k-common_advanced.onnx",
